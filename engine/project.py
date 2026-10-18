@@ -94,6 +94,11 @@ class ProjectSummary(BaseModel):
     renders: int
     created_at: datetime
     updated_at: datetime
+    thumbnail: str | None = Field(None, description="first clip or photo, relative to the workspace "
+                                                    "(for GET /media/thumbnail)")
+    latest_version: int | None = Field(None, description="newest render")
+    duration: float | None = Field(None, description="length of the newest render (seconds)")
+    open_questions: int = Field(0, description="blocking questions still without an answer")
 
 
 def slugify(text: str) -> str:
@@ -197,9 +202,16 @@ class ProjectStore:
                     p = Project.model_validate_json(f.read_text())
                 except ValueError:
                     continue
+                visual = next((x for x in p.files if x.kind in ("clip", "photo")), None)
+                last = max(p.renders, key=lambda r: r.version, default=None)
                 out.append(ProjectSummary(id=p.id, name=p.name, status=p.status, content_type=p.brief.content_type,
                                           files=len(p.files), renders=len(p.renders), created_at=p.created_at,
-                                          updated_at=p.updated_at))
+                                          updated_at=p.updated_at,
+                                          thumbnail=f"{p.id}/{visual.path}" if visual else None,
+                                          latest_version=last.version if last else None,
+                                          duration=last.duration if last else None,
+                                          open_questions=sum(1 for q in p.questions
+                                                             if q.blocking and not p.answers.get(q.id))))
         return sorted(out, key=lambda s: s.updated_at, reverse=True)
 
     def create(self, name: str, brief: BriefData | None = None) -> Project:

@@ -284,6 +284,8 @@ def validation_lines(e: ValidationError, limit: int = 20) -> list[str]:
 
 class ResolvedShot(BaseModel):
     idx: int
+    segment: int = Field(0, description="index of the segment in timeline.segments that this shot comes from")
+    shot: int | None = Field(None, description="index in that voiceover block's shots (None: the segment itself)")
     kind: str
     src: str | None
     in_: float = Field(serialization_alias="in")
@@ -306,6 +308,7 @@ class ResolvedShot(BaseModel):
 
 class ResolvedOverlay(BaseModel):
     kind: Literal["text", "broll", "graphic", "sfx", "flash"]
+    index: int | None = Field(None, description="position in the plan's list for this kind (text, broll...)")
     start: float
     end: float
     text: str | None = None
@@ -353,8 +356,12 @@ def view(tl: Timeline) -> TimelineView:
     cfg = style_for(edl)
     items, grid = E.build_timeline(edl, cfg)
     total = items[-1]["end"] if items else 0.0
+    # the layout makes one item per segment, or one per shot of a voiceover block: which segment is each from?
+    owners: list[tuple[int, int | None]] = []
+    for si, s in enumerate(edl["segments"]):
+        owners += [(si, j) for j in range(len(s.get("shots") or []))] if s.get("type") == "vo" else [(si, None)]
     shots, overlays, warn = [], [], []
-    for it in items:
+    for n, it in enumerate(items):
         if it["kind"] == "endcard":
             continue
         seg = it["seg"]
@@ -362,8 +369,9 @@ def view(tl: Timeline) -> TimelineView:
         heard = None
         if blk is not None:
             heard = " ".join(w["w"] for w in blk["words"] if it["start"] - 0.02 <= w["s"] < it["end"] - 0.02) or None
+        si, sj = owners[n] if n < len(owners) else (len(edl["segments"]) - 1, None)
         shots.append(ResolvedShot(
-            idx=it["idx"], kind=it["kind"], src=it["src"], in_=round(float(it["in"]), 3),
+            idx=it["idx"], segment=si, shot=sj, kind=it["kind"], src=it["src"], in_=round(float(it["in"]), 3),
             out=round(float(it["out"]), 3), start=round(it["start"], 3), end=round(it["end"], 3),
             duration=round(it["end"] - it["start"], 3), label=it["label"] or None, transition=it["trans_in"],
             role=E.seg_role(it, edl, cfg), speed=it["speed"], ramp=bool(it["ramp"]), beat_synced=it["beat_synced"],
@@ -380,24 +388,25 @@ def view(tl: Timeline) -> TimelineView:
             warn.append(err.message)
             return None
 
-    for x in edl.get("text", []):
+    for i, x in enumerate(edl.get("text", [])):
         r = span(x)
         if r:
             what = " / ".join(filter(None, [x.get("text"), x.get("sub")])) or " | ".join(
                 str(i) for i in (x.get("items") or x.get("lines") or []))
-            overlays.append(ResolvedOverlay(kind="text", start=r[0], end=r[1], text=what, style=x.get("style")))
-    for b in edl.get("broll", []):
+            overlays.append(ResolvedOverlay(kind="text", index=i, start=r[0], end=r[1], text=what,
+                                            style=x.get("style")))
+    for i, b in enumerate(edl.get("broll", [])):
         r = span(dict(b, dur=b.get("dur", 2.0)))
         if r:
-            overlays.append(ResolvedOverlay(kind="broll", start=r[0], end=r[1], src=b["src"]))
-    for g in edl.get("graphics", []):
+            overlays.append(ResolvedOverlay(kind="broll", index=i, start=r[0], end=r[1], src=b["src"]))
+    for i, g in enumerate(edl.get("graphics", [])):
         r = span(g, 2.0)
         if r:
-            overlays.append(ResolvedOverlay(kind="graphic", start=r[0], end=r[1], src=g.get("src")))
-    for s in edl.get("sfx", []):
+            overlays.append(ResolvedOverlay(kind="graphic", index=i, start=r[0], end=r[1], src=g.get("src")))
+    for i, s in enumerate(edl.get("sfx", [])):
         r = span(s, 0.5)
         if r:
-            overlays.append(ResolvedOverlay(kind="sfx", start=r[0], end=r[1], src=s.get("src")))
+            overlays.append(ResolvedOverlay(kind="sfx", index=i, start=r[0], end=r[1], src=s.get("src")))
     overlays.sort(key=lambda o: o.start)
 
     cap: dict[str, Any] = {"enabled": E.captions_enabled(edl, cfg)}

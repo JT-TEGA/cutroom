@@ -28,9 +28,11 @@ def workspace_path(path: str) -> Path:
 
 
 @router.get("/projects/{pid}/outputs/{version}/video", response_class=FileResponse, responses=RANGE_DOC)
-def output_video(pid: str, version: int, svc: Services = Depends(services)) -> FileResponse:
+def output_video(pid: str, version: int, download: bool = Query(False, description="as an attachment (save as)"),
+                 svc: Services = Depends(services)) -> FileResponse:
     p = output_file(svc, pid, version, "video")
-    return FileResponse(p, media_type="video/mp4", filename=p.name, content_disposition_type="inline")
+    return FileResponse(p, media_type="video/mp4", filename=p.name,
+                        content_disposition_type="attachment" if download else "inline")
 
 
 @router.get("/projects/{pid}/outputs/{version}/contact", response_class=FileResponse)
@@ -47,8 +49,10 @@ def media_file(path: str = Query(..., description="relative to the workspace, e.
 
 @router.get("/media/thumbnail", response_class=FileResponse)
 def thumbnail(path: str = Query(..., description="clip or photo, relative to the workspace"),
-              w: int = Query(320, ge=64, le=1080, description="width in pixels")) -> FileResponse:
-    """A JPEG thumbnail of a clip (a frame ~10% in) or photo (HEIC included). Cached next to the project."""
+              w: int = Query(320, ge=64, le=1080, description="width in pixels"),
+              t: float | None = Query(None, ge=0, description="seconds into a clip (default: ~10% in)")) \
+        -> FileResponse:
+    """A JPEG thumbnail of a clip (a frame ~10% in, or at t) or photo (HEIC included). Cached next to the project."""
     from engine.common import ffprobe, run
     from engine.config import project_layout, use_layout
     from engine.media import AUDIO_EXT, is_image, photo_path
@@ -59,7 +63,7 @@ def thumbnail(path: str = Query(..., description="clip or photo, relative to the
     rel = src.relative_to(paths().workspace.resolve())
     proj_dir = paths().workspace / rel.parts[0]
     st = src.stat()
-    key = hashlib.sha1(f"{src}|{st.st_size}|{int(st.st_mtime)}|{w}".encode()).hexdigest()[:16]
+    key = hashlib.sha1(f"{src}|{st.st_size}|{int(st.st_mtime)}|{w}|{t}".encode()).hexdigest()[:16]
     out = proj_dir / "work" / "_cache" / "thumbs" / f"{key}.jpg"
     if not out.exists():
         out.parent.mkdir(parents=True, exist_ok=True)
@@ -74,7 +78,7 @@ def thumbnail(path: str = Query(..., description="clip or photo, relative to the
                 info = ffprobe(src)
                 if not info.get("has_video"):
                     raise EngineError("no video stream to thumbnail", code="no_thumbnail", status=415)
-                t = min(1.0, info["duration"] * 0.1)
-                run(["ffmpeg", "-hide_banner", "-loglevel", "error", "-y", "-ss", f"{t:.2f}", "-i", src,
+                at = min(1.0, info["duration"] * 0.1) if t is None else min(t, max(0.0, info["duration"] - 0.05))
+                run(["ffmpeg", "-hide_banner", "-loglevel", "error", "-y", "-ss", f"{at:.2f}", "-i", src,
                      "-frames:v", "1", "-vf", f"scale={w}:-2", "-q:v", "4", out])
     return FileResponse(out, media_type="image/jpeg", headers={"Cache-Control": "max-age=86400"})

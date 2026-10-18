@@ -89,6 +89,8 @@ class Settings(BaseModel):
     brand: BrandSettings
     app: AppSettings
     fonts_available: list[str] = Field(default_factory=list)
+    font_files: dict[str, str] = Field(default_factory=dict,
+                                       description="family -> file for GET /fonts/{file} (upright, variable if any)")
 
 
 class SettingsUpdate(BaseModel):
@@ -98,13 +100,28 @@ class SettingsUpdate(BaseModel):
     app: dict[str, Any] | None = None
 
 
+FONT_EXT = (".ttf", ".otf", ".woff", ".woff2")
+
+
 def font_families() -> list[str]:
     out = []
     for f in sorted(paths().fonts.glob("*")):
-        if f.suffix.lower() in (".ttf", ".otf", ".woff", ".woff2"):
+        if f.suffix.lower() in FONT_EXT:
             fam = re.split(r"[-\[_]", f.stem)[0]
             if fam not in out:
                 out.append(fam)
+    return out
+
+
+def font_files() -> dict[str, str]:
+    """family -> one file for previews: a variable font first, then Regular, then whatever is there (not italic)."""
+    def rank(f: Path) -> tuple[int, str]:
+        n = f.stem.lower()
+        return (0 if "[" in n else 1 if "regular" in n else 3 if "italic" in n else 2, f.name)
+
+    out: dict[str, str] = {}
+    for f in sorted((x for x in paths().fonts.glob("*") if x.suffix.lower() in FONT_EXT), key=rank):
+        out.setdefault(re.split(r"[-\[_]", f.stem)[0], f.name)
     return out
 
 
@@ -161,7 +178,7 @@ def load() -> Settings:
     raw = dict(DEFAULTS)
     raw.update(load_settings(paths().brand))
     brand = BrandSettings.model_construct(**{k: raw.get(k) for k in BrandSettings.model_fields})
-    return Settings(brand=brand, app=load_app(), fonts_available=font_families())
+    return Settings(brand=brand, app=load_app(), fonts_available=font_families(), font_files=font_files())
 
 
 def save(update: SettingsUpdate) -> Settings:

@@ -47,6 +47,10 @@ class ReviseRequest(BaseModel):
     render: bool = Field(False, description="queue a render when the plan is updated")
 
 
+class RevealRequest(BaseModel):
+    version: int | None = Field(None, description="select this render's video; omit for the project folder")
+
+
 class ReferenceRequest(BaseModel):
     url: str | None = Field(None, description="defaults to the brief's reference URL")
     cookies_from_browser: str | None = Field(None, description="e.g. chrome: Instagram often needs your login")
@@ -271,3 +275,45 @@ def output_file(svc: Services, pid: str, version: int, what: str) -> Path:
             if rel:
                 return svc.store.dir(pid) / rel
     raise EngineError(f"no {what} for version {version}", code="output_not_found", status=404)
+
+
+@router.post("/projects/{pid}/reveal", status_code=status.HTTP_204_NO_CONTENT, tags=["media"])
+def reveal(pid: str, body: RevealRequest | None = None, svc: Services = Depends(services)) -> None:
+    """Show the project folder, or a render's video, in Finder (the server runs on your Mac)."""
+    from engine.system import reveal as show
+    svc.store.get(pid)
+    show(output_file(svc, pid, body.version, "video") if body and body.version else svc.store.dir(pid))
+
+
+class VoiceoverInfo(BaseModel):
+    file_id: str
+    name: str
+    src: str = Field(description="relative to the project folder")
+    preview: str | None = Field(None, description="cleaned + cut, as it will sound; relative to the workspace "
+                                                  "(for GET /media/file)")
+    stats: dict[str, Any] | None = Field(None, description="clean-up numbers: lufs_before/after, noise, snr")
+
+
+@router.get("/projects/{pid}/voiceover", response_model=list[VoiceoverInfo], tags=["editing"])
+def voiceover(pid: str, svc: Services = Depends(services)) -> list[VoiceoverInfo]:
+    """The voiceovers after planning: the preview to listen to and what the clean-up did."""
+    import json
+
+    proj = svc.store.get(pid)
+    d = svc.store.dir(pid)
+    stats: dict[str, tuple[float, dict[str, Any]]] = {}
+    for f in (d / "work" / "_cache" / "voice").glob("*.json"):
+        try:
+            st = json.loads(f.read_text())
+        except (OSError, ValueError):
+            continue
+        src, mtime = st.get("src"), f.stat().st_mtime
+        if src and (src not in stats or mtime > stats[src][0]):
+            stats[src] = (mtime, st)
+    out = []
+    for n, f in enumerate((x for x in proj.files if x.kind == "voiceover"), 1):
+        pv = d / "work" / ("vo_preview.wav" if n == 1 else f"vo_preview_{n}.wav")
+        out.append(VoiceoverInfo(file_id=f.id, name=f.name, src=f.path,
+                                 preview=f"{pid}/work/{pv.name}" if pv.exists() else None,
+                                 stats=stats.get(f.path, (0, None))[1]))
+    return out

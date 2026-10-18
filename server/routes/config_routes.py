@@ -2,8 +2,10 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Query
+from fastapi.responses import FileResponse
 
 from engine import settings as S
+from engine.config import EngineError, paths
 from engine.system import SystemStatus, status
 
 router = APIRouter(tags=["config"])
@@ -41,3 +43,13 @@ def put_settings(body: S.SettingsUpdate) -> S.Settings:
 def system_status(claude: bool = Query(True, description="also check Claude Code (takes ~1-2 s)")) -> SystemStatus:
     """ffmpeg, node/puppeteer, Python packages, Whisper model, face model, fonts, Claude Code install + login."""
     return status(include_claude=claude)
+
+
+@router.get("/fonts/{name}", response_class=FileResponse)
+def font(name: str) -> FileResponse:
+    """A font from assets/fonts (the app previews captions and titles with the real fonts)."""
+    root = paths().fonts.resolve()
+    p = (root / name).resolve()
+    if p.parent != root or p.suffix.lower() not in S.FONT_EXT or not p.is_file():
+        raise EngineError(f"no font {name!r}", code="font_not_found", status=404)
+    return FileResponse(p, headers={"Cache-Control": "max-age=86400"})

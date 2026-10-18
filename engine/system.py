@@ -39,6 +39,7 @@ class SystemStatus(BaseModel):
     claude_code: dict[str, Any]
     brain: dict[str, Any]
     platform: str
+    demo: bool = Field(False, description="brain calls are answered by the scripted demo brain (CUTROOM_BRAIN=demo)")
 
 
 def _version(cmd: list[str]) -> str:
@@ -102,9 +103,12 @@ def status(include_claude: bool = True) -> SystemStatus:
                                        if claude.get("logged_in") else "not logged in")).strip(),
                             hint=claude.get("hint")))
     brain = get_brain(app)
+    demo = brain.name == "demo"
     brain_info = {"backend": app.brain_backend, "model": app.anthropic_model
                   if app.brain_backend == "anthropic-api" else (app.brain_model or "CLI default")}
-    if app.brain_backend == "anthropic-api":
+    if demo:
+        brain_info.update(brain.status())
+    elif app.brain_backend == "anthropic-api":
         brain_info.update(brain.status())
     else:
         brain_info["ready"] = bool(claude.get("ready")) if include_claude else None
@@ -114,4 +118,24 @@ def status(include_claude: bool = True) -> SystemStatus:
     can_render = all(ok_.get(k, False) for k in ("ffmpeg", "ffprobe", "node", "puppeteer", "python", "fonts"))
     return SystemStatus(ok=required_ok, can_render=can_render,
                         can_plan=can_render and bool(brain_info.get("ready")), checks=checks,
-                        claude_code=claude, brain=brain_info, platform=f"{platform.system()} {platform.release()}")
+                        claude_code=claude, brain=brain_info, platform=f"{platform.system()} {platform.release()}",
+                        demo=demo)
+
+
+def reveal(path: Path) -> None:
+    """Show a file (selected) or folder in the file manager: Finder on macOS."""
+    from .config import EngineError
+    path = Path(path)
+    if not path.exists():
+        raise EngineError(f"not found: {path.name}", code="file_not_found", status=404)
+    system = platform.system()
+    if system == "Darwin":
+        cmd = ["open", "-R", str(path)] if path.is_file() else ["open", str(path)]
+    elif system == "Windows":
+        cmd = ["explorer", f"/select,{path}"] if path.is_file() else ["explorer", str(path)]
+    else:
+        cmd = ["xdg-open", str(path.parent if path.is_file() else path)]
+    try:
+        subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    except OSError as e:
+        raise EngineError(f"couldn't open the file manager: {e}", code="reveal_failed", status=500) from e

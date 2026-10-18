@@ -8,15 +8,21 @@ Each task returns validated JSON:
     reference.style_spec(...)   -> what a reference reel does, in editing terms
     revise.revise(...)          -> the plan with the creator's notes applied
 
-Backends: ClaudeCodeBrain (default; your logged-in Claude Code, no API key) and AnthropicAPIBrain (API key).
+Backends: ClaudeCodeBrain (default; your logged-in Claude Code, no API key) and AnthropicAPIBrain (API key);
+DemoBrain (scripted answers) for demos and screenshots.
 """
 from __future__ import annotations
+
+import os
 
 from .base import Brain, BrainError, BrainRequest, BrainResponse, ask, extract_json
 
 
 def get_brain(app_settings=None) -> Brain:
-    """The backend picked in settings (workspace/settings.json)."""
+    """The backend picked in settings (workspace/settings.json); CUTROOM_BRAIN=demo forces the scripted demo brain."""
+    if os.environ.get("CUTROOM_BRAIN") == "demo":
+        from .demo import DemoBrain
+        return DemoBrain()
     from ..settings import load_app
     s = app_settings or load_app()
     if s.brain_backend == "anthropic-api":
