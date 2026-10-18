@@ -30,7 +30,7 @@ from .brain import revise as brain_revise
 from .brain.context import answers_text
 from .brain.schemas import AnalyseResult, ClipMatchResult
 from .common import list_presets, load_transcript, read_json, style_for, transcribe_subprocess, write_json
-from .config import EngineError, job_log, log, step
+from .config import EngineError, job_log, log, progress_span, step
 from .models import StyleSpec
 from .project import Project, ProjectStore, RenderInfo
 
@@ -194,7 +194,8 @@ def plan(store: ProjectStore, pid: str, brain: Brain) -> T.TimelineView:
         step("check the brief", 2)
         if proj.brief.mode and "REFERENCE" in proj.brief.mode.upper() and proj.brief.reference_url \
                 and not proj.style_spec:
-            reference(store, pid, brain)
+            with progress_span(2, 8):
+                reference(store, pid, brain)
             proj = store.get(pid)
         a = _analysis(store, proj)
         talk = a["talk"]
@@ -219,7 +220,12 @@ def plan(store: ProjectStore, pid: str, brain: Brain) -> T.TimelineView:
             matches = _match(store, proj, a, brain, cwd)
         # 4. the software's draft (cuts, moments, beat sync, B-roll placement)
         step("draft", 45)
-        draft_edl = autocut.draft(pid, _clip_specs(store, proj))
+        with progress_span(45, 72):
+            draft_edl = autocut.draft(pid, _clip_specs(store, proj))
+        if not draft_edl.get("segments"):
+            raise EngineError("the rough cut came out empty: no clip had a usable stretch", code="empty_draft",
+                              status=422, hint="The clips may be too blurry, dark or shaky. Add steadier clips or "
+                                               "photos, then plan again.")
         draft = T.parse(draft_edl)
         try:
             draft_view = T.view(draft)

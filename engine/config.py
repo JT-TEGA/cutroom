@@ -215,10 +215,30 @@ def log(*args: object, sep: str = " ", end: str = "\n", file: object = None, flu
             rep.log(line.rstrip())
 
 
+_span: contextvars.ContextVar[tuple[float, float] | None] = contextvars.ContextVar("cutroom_span", default=None)
+
+
+@contextmanager
+def progress_span(lo: float, hi: float) -> Iterator[None]:
+    """Inside, step() percentages (0-100) map onto lo-hi of the job: a sub-task's own progress (the draft, a
+    reference download) then moves the job's bar through its share instead of jumping past later stages."""
+    outer = _span.get()
+    if outer:
+        lo, hi = outer[0] + (outer[1] - outer[0]) * lo / 100, outer[0] + (outer[1] - outer[0]) * hi / 100
+    token = _span.set((lo, hi))
+    try:
+        yield
+    finally:
+        _span.reset(token)
+
+
 def step(name: str, pct: float | None = None) -> None:
     """Announce a pipeline stage (and overall % done, 0-100) to the attached reporter."""
     rep = _reporter.get()
     if rep is not None:
+        span = _span.get()
+        if span and pct is not None:
+            pct = span[0] + (span[1] - span[0]) * max(0.0, min(100.0, pct)) / 100
         rep.step(name, pct)
 
 

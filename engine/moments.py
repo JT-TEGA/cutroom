@@ -139,12 +139,13 @@ def frame_scores(d, shake_ok=False):
 
 
 def windows(d, length, n=3, shake_ok=False, a=0.0, b=None, min_gap=0.3):
-    """Best non-overlapping windows of `length` seconds -> [{"in", "out", "score", "loud_db"}]."""
+    """Best non-overlapping windows of `length` seconds -> [{"in", "out", "score", "loud_db"}].
+    A clip shorter than `length` gives one window: all of it (the layout holds or trims it to the shot)."""
     score, good = frame_scores(d, shake_ok)
     fps = d["fps"]
-    L = max(1, int(round(length * fps)))
     lo = int(a * fps)
     hi = min(len(score), int((b if b is not None else d["duration"]) * fps))
+    L = max(1, min(int(round(length * fps)), hi - lo))
     audio = np.array(d["audio_db"])
     cands = []
     for strict in (True, False):

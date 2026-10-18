@@ -154,3 +154,40 @@ def test_demo_mode_is_reported(client: TestClient, monkeypatch) -> None:  # noqa
     monkeypatch.setenv("CUTROOM_BRAIN", "demo")
     s = client.get("/system/status", params={"claude": "false"}).json()
     assert s["demo"] is True and s["brain"]["backend"] == "demo" and s["brain"]["ready"] is True
+
+
+def test_progress_span_maps_a_sub_task_into_its_share() -> None:
+    from engine.config import progress_span, step, use_reporter
+
+    class Rep:
+        def __init__(self) -> None:
+            self.steps: list[tuple[str, float | None]] = []
+
+        def log(self, line: str) -> None: ...
+
+        def step(self, name: str, pct: float | None = None) -> None:
+            self.steps.append((name, pct))
+
+    rep = Rep()
+    with use_reporter(rep):
+        step("before", 10)
+        with progress_span(45, 75):
+            step("half", 50)
+            step("named only")
+            with progress_span(0, 50):
+                step("nested end", 100)
+            step("end", 100)
+        step("after", 80)
+    assert rep.steps == [("before", 10), ("half", 60.0), ("named only", None), ("nested end", 60.0),
+                         ("end", 75.0), ("after", 80)]
+
+
+def test_a_clip_shorter_than_the_moment_window_still_gives_a_shot() -> None:
+    """5 s gym clips with a ~4 s shot (window 1.25x = 5.1 s) used to give no moments, and an empty plan."""
+    from engine.moments import windows
+    n = 150                                            # 5 s at 30 fps
+    d = {"fps": 30, "duration": 5.0, "sharp": [80.0] * n, "jitter": [0.5] * n, "bright": [120.0] * n,
+         "activity": [3.0] * n, "face": [0.0] * n, "audio_db": [-30.0] * n}
+    ws = windows(d, 4.09 * 1.25, n=1)
+    assert len(ws) == 1 and ws[0]["in"] == 0 and ws[0]["out"] == 5.0
+    assert len(windows(d, 2.0, n=2)) == 2               # long enough clips are unchanged
