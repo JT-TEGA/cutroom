@@ -11,7 +11,23 @@ Output: work/_cache/transcripts/<clip-key>.json
 import argparse
 import time
 
-from common import FF, cache_dir, describe, die, ffprobe, file_key, load_brand, read_json, rel, resolve, run, tc, transcript_path, write_json
+from .common import (
+    FF,
+    cache_dir,
+    describe,
+    die,
+    ffprobe,
+    file_key,
+    load_brand,
+    read_json,
+    rel,
+    resolve,
+    run,
+    tc,
+    transcript_path,
+    write_json,
+)
+from .config import log
 
 
 def extract_wav(src):
@@ -54,22 +70,22 @@ def transcribe(src, model_name, language, vocab):
 
 def show(tr, gap=0.6):
     """Readable transcript: one line per phrase, pauses marked."""
-    print(f"\n== {tr['src']}  ({tc(tr['duration'])}, {len(tr['words'])} words)")
+    log(f"\n== {tr['src']}  ({tc(tr['duration'])}, {len(tr['words'])} words)")
     if not tr["words"]:
-        print("   (no speech)")
+        log("   (no speech)")
         return
     line, start, prev_e = [], None, None
     for w in tr["words"]:
         if prev_e is not None and w["s"] - prev_e > gap:
-            print(f"  [{tc(start)}] {' '.join(line)}")
-            print(f"           ... pause {w['s'] - prev_e:.1f}s")
+            log(f"  [{tc(start)}] {' '.join(line)}")
+            log(f"           ... pause {w['s'] - prev_e:.1f}s")
             line, start = [], None
         if start is None:
             start = w["s"]
         line.append(w["w"] if w["p"] > 0.5 else f"{w['w']}(?)")
         prev_e = w["e"]
     if line:
-        print(f"  [{tc(start)}] {' '.join(line)}")
+        log(f"  [{tc(start)}] {' '.join(line)}")
 
 
 def main():
@@ -83,7 +99,7 @@ def main():
     brand = load_brand()
     model = a.model or brand["whisper_model"]
     lang = a.language or brand["language"]
-    from media import expand, is_image
+    from .media import expand, is_image
     for clip, _, _ in expand(a.clips):          # folders -> their clips, in capture order
         if is_image(clip):
             continue
@@ -93,10 +109,10 @@ def main():
         if out.exists() and not a.force:
             tr = read_json(out)
         else:
-            print(f"transcribing {clip} ({describe(ffprobe(clip))}) with {model} ...", flush=True)
+            log(f"transcribing {clip} ({describe(ffprobe(clip))}) with {model} ...", flush=True)
             tr = transcribe(clip, model, lang, brand.get("vocab"))
             write_json(out, tr)
-            print(f"  -> {rel(out)}  ({len(tr['words'])} words, {tr.get('elapsed', 0)}s)")
+            log(f"  -> {rel(out)}  ({len(tr['words'])} words, {tr.get('elapsed', 0)}s)")
         if a.show:
             show(tr)
 

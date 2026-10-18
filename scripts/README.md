@@ -1,6 +1,9 @@
 # Pipeline scripts
 
-Everything runs through `scripts/ve <command>` (it uses the project venv). Work files live in
+Everything runs through `scripts/ve <command>` (it uses the project venv). The code lives in the `engine/`
+package (`engine/<command>.py`; `ve` is a thin wrapper over `python -m engine.cli`), which the Cutroom API in
+`server/` also uses. Shared resources (presets, brand.md, fonts, SFX, the face model) are found through
+`engine/config.py` and can be moved with `CUTROOM_*` environment variables. Work files live in
 `work/<name>/` where `<name>` is the brief's file name (`briefs/oct-dump.md` → `oct-dump`).
 Transcripts, face tracks, moment scores, beat grids, converted photos and cleaned voiceovers are cached in
 `work/_cache/`.

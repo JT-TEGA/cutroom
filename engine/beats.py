@@ -13,7 +13,8 @@ import subprocess
 
 import numpy as np
 
-from common import cache_dir, file_key, read_json, resolve, tc, write_json
+from .common import cache_dir, file_key, read_json, resolve, tc, write_json
+from .config import log
 
 SR, HOP, NFFT = 22050, 512, 2048
 CACHE_VERSION = 4
@@ -183,11 +184,11 @@ def main():
     a = ap.parse_args()
     d = beats_for(a.audio, a.force)
     bs = d["beats"]
-    print(f"{a.audio}: ~{d['bpm']} BPM ({d['engine']}), {len(bs)} beats, one every {60 / d['bpm']:.2f}s")
+    log(f"{a.audio}: ~{d['bpm']} BPM ({d['engine']}), {len(bs)} beats, one every {60 / d['bpm']:.2f}s")
     show = bs if a.all else bs[:16]
-    print("  beats:     " + "  ".join(tc(x, 2) for x in show) + ("" if a.all else "  ..."))
-    print("  downbeats: " + "  ".join(tc(x, 2) for x in d["downbeats"][:10]) + "  ...")
-    print("  drops:     " + ("  ".join(tc(x, 2) for x in d["drops"]) or "none found"))
+    log("  beats:     " + "  ".join(tc(x, 2) for x in show) + ("" if a.all else "  ..."))
+    log("  downbeats: " + "  ".join(tc(x, 2) for x in d["downbeats"][:10]) + "  ...")
+    log("  drops:     " + ("  ".join(tc(x, 2) for x in d["drops"]) or "none found"))
 
 
 if __name__ == "__main__":

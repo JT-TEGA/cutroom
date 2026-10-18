@@ -12,8 +12,9 @@ import subprocess
 import cv2
 import numpy as np
 
-from common import ffprobe, rel, resolve, tc
-from media import is_image, photo_path
+from .common import ffprobe, rel, resolve, tc
+from .config import log
+from .media import is_image, photo_path
 
 TILE_W = 360
 
@@ -95,7 +96,7 @@ def main():
     ap.add_argument("--out")
     a = ap.parse_args()
     out, times = make(a.video, a.out, a.n, a.cols, a.times)
-    print(f"contact sheet -> {rel(out)}  ({', '.join(tc(t) for t in times)})")
+    log(f"contact sheet -> {rel(out)}  ({', '.join(tc(t) for t in times)})")
 
 
 if __name__ == "__main__":

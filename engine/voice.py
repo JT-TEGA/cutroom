@@ -19,9 +19,24 @@ import wave
 
 import numpy as np
 
-from common import (FF, PY, SCRIPTS, cache_dir, describe, die, ffprobe, file_key, load_brand, read_json, rel, resolve,
-                    run, tc, write_json)
-from transcribe import extract_wav
+from .common import (
+    FF,
+    cache_dir,
+    describe,
+    die,
+    ffprobe,
+    file_key,
+    load_brand,
+    read_json,
+    rel,
+    resolve,
+    run,
+    tc,
+    transcribe_subprocess,
+    write_json,
+)
+from .config import log
+from .transcribe import extract_wav
 
 SR = 48000
 REF_LUFS = -16.0
@@ -221,12 +236,12 @@ def main():
     for f in a.files:
         if not resolve(f).exists():
             die(f"not found: {f}")
-        print(f"VOICE {f}  [{describe(ffprobe(f))}]")
+        log(f"VOICE {f}  [{describe(ffprobe(f))}]")
         path, stats = clean(f, cfg, a.force)
-        print(f"  cleaned -> {rel(path)}\n  {summary(stats)}")
+        log(f"  cleaned -> {rel(path)}\n  {summary(stats)}")
         if stats.get("noise_window"):
-            print(f"  noise profile from the pause at {tc(stats['noise_window'][0])}")
-        subprocess.run([str(PY), str(SCRIPTS / "transcribe.py"), f] + ([] if a.no_show else ["--show"]), check=True)
+            log(f"  noise profile from the pause at {tc(stats['noise_window'][0])}")
+        transcribe_subprocess([f], show=not a.no_show)
 
 
 if __name__ == "__main__":

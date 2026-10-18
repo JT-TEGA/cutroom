@@ -7,7 +7,8 @@ import re
 import sys
 from pathlib import Path
 
-from common import cache_dir, describe, ffprobe, file_key, parse_clip_spec, rel, resolve, run
+from .common import cache_dir, describe, ffprobe, file_key, parse_clip_spec, rel, resolve, run
+from .config import log
 
 IMAGE_EXT = {".jpg", ".jpeg", ".png", ".heic", ".heif", ".webp", ".tif", ".tiff", ".bmp"}
 VIDEO_EXT = {".mp4", ".mov", ".m4v", ".mkv", ".webm", ".avi", ".mts", ".3gp"}
@@ -126,7 +127,11 @@ def describe_media(src):
     return describe(ffprobe(src))
 
 
-if __name__ == "__main__":
-    for path, a, b in expand(sys.argv[1:]):
+def main():
+    for path, _, _ in expand(sys.argv[1:]):
         t = dt.datetime.fromtimestamp(capture_time(path)).strftime("%Y-%m-%d %H:%M:%S")
-        print(f"{t}  {path}  [{describe_media(path)}]")
+        log(f"{t}  {path}  [{describe_media(path)}]")
+
+
+if __name__ == "__main__":
+    main()

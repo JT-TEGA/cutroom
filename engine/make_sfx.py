@@ -11,7 +11,8 @@ import wave
 
 import numpy as np
 
-from common import ROOT, rel
+from .common import rel
+from .config import log, paths
 
 SR = 48000
 rng = np.random.default_rng(7)
@@ -96,14 +97,14 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--force", action="store_true")
     a = ap.parse_args()
-    d = ROOT / "assets/sfx"
+    d = paths().sfx
     d.mkdir(parents=True, exist_ok=True)
     for name, fn in [("whoosh", whoosh), ("bass_hit", bass_hit), ("pop", pop), ("riser", riser), ("click", click)]:
         p = d / f"{name}.wav"
         if p.exists() and not a.force:
             continue
         write(p, fn())
-        print(f"  {rel(p)}")
+        log(f"  {rel(p)}")
 
 
 if __name__ == "__main__":

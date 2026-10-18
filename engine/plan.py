@@ -8,9 +8,10 @@ Voiceover blocks show the match-up: each B-roll shot with the words heard over i
 """
 import argparse
 
-import edl as E
-import voice
-from common import resolve, style_for, tc
+from . import edl as E
+from . import voice
+from .common import resolve, style_for, tc
+from .config import log
 
 
 def zoom_desc(z):
@@ -38,7 +39,7 @@ def main():
     cfg = style_for(edl)
     problems = E.validate(edl)
     if problems:
-        print("PROBLEMS:\n  - " + "\n  - ".join(problems))
+        log("PROBLEMS:\n  - " + "\n  - ".join(problems))
         return
     items, grid = E.build_timeline(edl, cfg)
     total = items[-1]["end"]
@@ -120,31 +121,31 @@ def main():
             if d <= total:
                 rows.append((d, 4, "   ~~ music drop ~~"))
 
-    print(f"\nPLAN {a.name}: {total:.1f}s" + (f" (target {edl['target_length']:g}s)" if edl.get("target_length") else "")
+    log(f"\nPLAN {a.name}: {total:.1f}s" + (f" (target {edl['target_length']:g}s)" if edl.get("target_length") else "")
           + f", {sum(1 for i in items if i['kind'] != 'endcard')} shots"
           + (f", preset {edl['preset']}" if edl.get("preset") else "") + f", grade {cfg['grade']}"
           + (f", grain {cfg['grain']}" if cfg["grain"] else "") + "\n")
     for t, _, txt in sorted(rows, key=lambda r: (r[0], r[1])):
-        print(f"{tc(t):>7}  {txt}")
-    print(f"{tc(total):>7}  END")
+        log(f"{tc(t):>7}  {txt}")
+    log(f"{tc(total):>7}  END")
 
     if E.captions_enabled(edl, cfg):
         ec = next((i for i in items if i["kind"] == "endcard"), None)
         words = E.caption_words(edl, items, cfg)
         pages = E.caption_pages(words, cfg, ec["start"] if ec else total)
-        print(f"\nCAPTIONS: {'talking + voiceover' if E.vo_blocks(items) else 'talking parts only'}, "
+        log(f"\nCAPTIONS: {'talking + voiceover' if E.vo_blocks(items) else 'talking parts only'}, "
               f"{len(words)} words in {len(pages)} pops "
               f"({cfg['caption_font']} {cfg['caption_weight']}, {cfg['caption_case']})")
         cap = edl.get("captions") or {}
         if cap.get("replace"):
-            print("  fixes: " + ", ".join(f"{k} -> {v}" for k, v in cap["replace"].items()))
+            log("  fixes: " + ", ".join(f"{k} -> {v}" for k, v in cap["replace"].items()))
     else:
-        print("\nCAPTIONS: off")
+        log("\nCAPTIONS: off")
     blocks = E.vo_blocks(items)
     if blocks:
         srcs = ", ".join(dict.fromkeys(b["src"] for b in blocks))
         c = {k: cfg[k] for k in voice.KEYS}
-        print(f"VOICEOVER: {srcs}, {sum(b['dur'] for b in blocks):.1f}s in {len(blocks)} block(s), "
+        log(f"VOICEOVER: {srcs}, {sum(b['dur'] for b in blocks):.1f}s in {len(blocks)} block(s), "
               + (f"cleaned (denoise {c['voice_denoise_db']:g} dB, de-ess {c['voice_deess']:g}, "
                  f"comp {c['voice_comp_ratio']:g}:1, -16 LUFS)" if voice.wanted(cfg, "vo") else "not cleaned")
               + "; B-roll muted under it unless \"ambient\"")
@@ -152,7 +153,7 @@ def main():
     if m.get("src"):
         bs = edl.get("beat_sync") or {}
         every = bs.get("every", cfg["beat_every"])
-        print(f"MUSIC: {m['src']}, {grid['bpm']} BPM, starts at {tc(grid['start'], 2)} of the track"
+        log(f"MUSIC: {m['src']}, {grid['bpm']} BPM, starts at {tc(grid['start'], 2)} of the track"
               + (f" (requested {m.get('start')})" if isinstance(m.get("start"), str) else "")
               + (f", cuts every {every} beat(s)" if every else "")
               + (f", every {cfg['beat_every_after_drop']} after the drop" if cfg["beat_every_after_drop"] else "")
@@ -160,14 +161,14 @@ def main():
               + (", ducks under voice" if cfg["duck"] and (blocks or any(E.seg_role(i, edl, cfg) == "voice" for i in items))
                  else ""))
     else:
-        print("MUSIC: none")
+        log("MUSIC: none")
     if edl.get("notes"):
-        print("\nNOTES:\n  - " + "\n  - ".join(edl["notes"]))
+        log("\nNOTES:\n  - " + "\n  - ".join(edl["notes"]))
     if a.cuts:
         rep = E.removed_report(edl)
-        print(f"\nREMOVED FROM RAW ({sum(r['out'] - r['in'] for r in rep):.1f}s total):")
+        log(f"\nREMOVED FROM RAW ({sum(r['out'] - r['in'] for r in rep):.1f}s total):")
         for r in rep:
-            print(f"  {r['src']} {tc(r['in'], 2)}-{tc(r['out'], 2)}  {r['why']}")
+            log(f"  {r['src']} {tc(r['in'], 2)}-{tc(r['out'], 2)}  {r['why']}")
 
 
 if __name__ == "__main__":

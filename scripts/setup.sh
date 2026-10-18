@@ -10,11 +10,11 @@ command -v node >/dev/null || brew install node
 
 [ -x .venv/bin/python ] || python3 -m venv .venv
 .venv/bin/pip install -q --upgrade pip
-.venv/bin/pip install -q -r scripts/requirements.txt
+.venv/bin/pip install -q -e ".[dev]"
 
 npm install --no-audit --no-fund
 
-mkdir -p briefs raw music voiceover assets/fonts assets/sfx output work scripts/models
+mkdir -p briefs raw music voiceover assets/fonts assets/sfx output work workspace scripts/models
 M=scripts/models/face_detection_yunet_2023mar.onnx
 [ -s "$M" ] || curl -sSL -o "$M" "https://media.githubusercontent.com/media/opencv/opencv_zoo/main/models/face_detection_yunet/face_detection_yunet_2023mar.onnx"
 F="assets/fonts/Montserrat[wght].ttf"
@@ -24,6 +24,6 @@ F="assets/fonts/Montserrat[wght].ttf"
 for s in Regular Italic; do
   [ -s "assets/fonts/InstrumentSerif-$s.ttf" ] || curl -sSL -o "assets/fonts/InstrumentSerif-$s.ttf" "https://github.com/google/fonts/raw/main/ofl/instrumentserif/InstrumentSerif-$s.ttf"
 done
-.venv/bin/python scripts/make_sfx.py
+PYTHONPATH=. .venv/bin/python -m engine.make_sfx
 chmod +x scripts/ve
 scripts/ve doctor

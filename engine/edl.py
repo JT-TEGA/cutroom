@@ -6,8 +6,9 @@ import bisect
 import difflib
 import re
 
-from common import ffprobe, load_transcript, read_json, resolve, style_for, tc, work_dir
-from media import is_audio, is_image
+from .common import die, ffprobe, load_transcript, read_json, resolve, style_for, tc, work_dir
+from .config import EngineError
+from .media import is_audio, is_image
 
 SPEECH_GAP = 0.6
 VO_PREROLL = 0.08      # a cued shot cuts in just before its word lands
@@ -28,7 +29,7 @@ def load(name):
     p = work_dir(name) / "edl.json"
     edl = read_json(p)
     if edl is None:
-        raise SystemExit(f"no edit plan at {p} (run `ve draft` first, then save edl.json)")
+        die(f"no edit plan at {p} (run `ve draft` first, then save edl.json)", code="no_plan", status=404)
     edl.setdefault("name", name)
     return edl
 
@@ -209,7 +210,8 @@ def ramp_curve(spec):
     if isinstance(spec, list):
         return sorted(spec)
     if spec not in RAMPS:
-        raise SystemExit(f"unknown ramp {spec!r}; use one of {[k for k in RAMPS if isinstance(k, str)]} or [[f, speed], ...]")
+        die(f"unknown ramp {spec!r}; use one of {[k for k in RAMPS if isinstance(k, str)]} or [[f, speed], ...]",
+            code="invalid_plan", status=422)
     return RAMPS[spec]
 
 
@@ -303,8 +305,8 @@ def validate(edl):
         if seg.get("ramp") is not None:
             try:
                 ramp_curve(seg["ramp"])
-            except SystemExit as e:
-                problems.append(f"segment #{i}: {e}")
+            except EngineError as e:
+                problems.append(f"segment #{i}: {e.message}")
     for j, b in enumerate(edl.get("broll", []), 1):
         if not resolve(b.get("src", "")).exists():
             problems.append(f"broll #{j}: file not found: {b.get('src')}")
@@ -494,7 +496,7 @@ def music_grid(edl, cfg, segs):
     m = edl.get("music") or {}
     if not m.get("src"):
         return None
-    from beats import beats_for   # librosa only when there is music
+    from .beats import beats_for  # librosa only when there is music
     bt = beats_for(m["src"])
     at = float(m.get("at", 0))
     start = m.get("start", cfg["music_start"])
@@ -524,7 +526,7 @@ def music_grid(edl, cfg, segs):
             return _grid_from(bt, 0.0, at + T - drops[0])   # not enough music before the drop: delay it
         n = int(start.split("-", 1)[1]) if "-" in start else 16
         return _grid_from(bt, beats[max(0, di - n)], at)
-    raise SystemExit(f"music start {start!r} not understood (number, auto, drop, drop-16)")
+    die(f"music start {start!r} not understood (number, auto, drop, drop-16)", code="invalid_plan", status=422)
 
 
 def build_timeline(edl, cfg=None):
@@ -589,7 +591,7 @@ def resolve_span(item, items, default_dur=1.5):
     total = main_end(items)
     if item.get("cue"):
         if item.get("_cue_s") is None:
-            raise SystemExit(f'cue "{item["cue"]}" is not said anywhere in the edit: {item}')
+            die(f'cue "{item["cue"]}" is not said anywhere in the edit: {item}', code="invalid_plan", status=422)
         s = item["_cue_s"] + float(item.get("offset", 0))
         e = s + float(item["dur"]) if "dur" in item else (float(item["end"]) if "end" in item else s + default_dur)
         return s, e
@@ -600,7 +602,7 @@ def resolve_span(item, items, default_dur=1.5):
         if tgt is None:          # a voiceover block's label spans the whole block
             blk = [it for it in items if it.get("vo") is not None and it["vo"]["label"] and it["vo"]["label"] == ref]
             if not blk:
-                raise SystemExit(f"overlay item refers to unknown segment {ref!r}: {item}")
+                die(f"overlay item refers to unknown segment {ref!r}: {item}", code="invalid_plan", status=422)
             tgt = {"start": blk[0]["start"], "end": blk[-1]["end"]}
         s = tgt["start"] + float(item.get("offset", 0))
         e = s + float(item["dur"]) if "dur" in item else tgt["end"]

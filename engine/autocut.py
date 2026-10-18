@@ -26,14 +26,25 @@ from pathlib import Path
 
 import numpy as np
 
-import contact_sheet
-import edl as E
-import moments
-import voice
-from common import (describe, die, ffprobe, load_transcript, parse_clip_spec, read_json, rel, resolve, style_for, tc,
-                    work_dir, write_json)
-from media import capture_time, describe_media, expand, is_audio, is_image
-from transcribe import extract_wav
+from . import contact_sheet, moments, voice
+from . import edl as E
+from .common import (
+    describe,
+    die,
+    ffprobe,
+    load_transcript,
+    parse_clip_spec,
+    read_json,
+    rel,
+    resolve,
+    style_for,
+    tc,
+    work_dir,
+    write_json,
+)
+from .config import log, step
+from .media import capture_time, describe_media, expand, is_audio, is_image
+from .transcribe import extract_wav
 
 SOFT_FILLERS = {"like", "basically", "literally", "actually", "so", "right", "okay", "ok"}
 SOFT_PHRASES = [("you", "know"), ("i", "mean"), ("kind", "of"), ("sort", "of")]
@@ -170,7 +181,7 @@ def speech_in(src, info, a, b, cfg):
 def beat_period(music):
     if not music:
         return None
-    from beats import beats_for
+    from .beats import beats_for
     return 60 / beats_for(music)["bpm"]
 
 
@@ -348,40 +359,30 @@ def cutaways(entries, cues, cfg):
     return out
 
 
-def main():
-    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--name", required=True, help="video name, e.g. oct-dump")
-    ap.add_argument("clips", nargs="+", help="raw/file.mp4, raw/file.mp4@0:05-0:12, raw/photo.heic, a folder, "
-                                             "or voiceover/vo.m4a where the voiceover goes")
-    ap.add_argument("--preset", help="content type (default: from the brief)")
-    ap.add_argument("--talk", choices=["yes", "no", "some", "voiceover", "mixed"],
-                    help="talking in this video? (default: brief/preset)")
-    ap.add_argument("--vo", nargs="*", help="voiceover file(s), file@0:00-0:20 ok (default: from the brief)")
-    ap.add_argument("--music", help="music track (default: from the brief)")
-    ap.add_argument("--length", type=float, help="target length in seconds")
-    ap.add_argument("--max-pause", type=float, help="longest pause kept inside a phrase (s)")
-    a = ap.parse_args()
+def draft(name, clips, preset=None, talk=None, vo=None, music=None, length=None, max_pause=None):
+    """Draft an edit plan -> the edl dict (also saved as work/<name>/edl.draft.json).
 
-    name = a.name
+    clips: specs in brief order ("raw/a.mp4", "raw/a.mp4@0:05-0:12", folders, voiceover files).
+    preset / talk / music / length default to work/<name>/brief.json; vo=None takes the brief's voiceovers."""
     brief = read_json(work_dir(name) / "brief.json") or {}
-    preset = a.preset or brief.get("preset")
+    preset = preset or brief.get("preset")
     cfg = style_for({"preset": preset, "style": brief.get("style_overrides") or {}})
-    if a.max_pause is not None:
-        cfg["max_pause"] = a.max_pause
-    talk = a.talk or brief.get("talk") or cfg["talk_default"]
-    music = a.music or brief.get("music")
-    target = a.length or brief.get("target_length") or float(cfg["target_length"])
+    if max_pause is not None:
+        cfg["max_pause"] = max_pause
+    talk = talk or brief.get("talk") or cfg["talk_default"]
+    music = music or brief.get("music")
+    target = length or brief.get("target_length") or float(cfg["target_length"])
     every = cfg["beat_every"] if music else 0
     period = beat_period(music) if music else None
     if period and every:
-        from edl import auto_every
+        from .edl import auto_every
         k = auto_every(period, float(cfg["shot_min"]), float(cfg["shot_max"])) if every == "auto" else int(every)
         shot = k * period
     else:
         shot = (float(cfg["shot_min"]) + float(cfg["shot_max"])) / 2
 
-    specs = expand(a.clips)
-    vo_specs = [parse_clip_spec(v) for v in a.vo] if a.vo is not None else \
+    specs = expand(clips)
+    vo_specs = [parse_clip_spec(v) for v in vo] if vo is not None else \
         [(v["src"], v.get("in"), v.get("out")) for v in brief.get("voiceover") or []]
     listed = {(rel(resolve(p)), s) for p, s, _ in specs if is_audio(p)}
     vo_extra = [v for v in vo_specs if (rel(resolve(v[0])), v[1]) not in listed]
@@ -392,12 +393,13 @@ def main():
     if talk in ("voiceover", "mixed") and not (listed or vo_extra):
         die(f"talking is {talk} but there's no voiceover: name it in the brief or pass --vo voiceover/<file>")
     cues = [dict(c) for c in brief.get("cues") or []]
-    print(f"draft {name}: preset {preset or '-'}, talking {talk}, target {target:g}s, "
+    log(f"draft {name}: preset {preset or '-'}, talking {talk}, target {target:g}s, "
           f"{'music ' + str(music) if music else 'no music'}, ~{shot:.2f}s per no-talk shot")
 
     # 1. classify every input
     entries = []
-    for path, s, e in specs:
+    for k, (path, s, e) in enumerate(specs):
+        step(f"analyse {Path(path).name}", 5 + 60 * k / max(1, len(specs)))
         if not resolve(path).exists():
             die(f"not found: {path}")
         if is_audio(path):
@@ -441,6 +443,7 @@ def main():
         c["entry"] = x
 
     # 2. voiceovers take their B-roll
+    step("lay b-roll over the voiceover", 68)
     free = lambda x: x["kind"] in ("moments", "photo") and not x.get("used") and not x.get("reserved")
     for k, en in enumerate(entries):
         if en["kind"] != "vo":
@@ -581,38 +584,38 @@ def main():
     for en in entries:
         if en["kind"] == "photo":
             if id(en) in left_ids or en.get("used"):
-                print(f"  PHOTO  {en['src']}  [{describe_media(en['src'])}]")
+                log(f"  PHOTO  {en['src']}  [{describe_media(en['src'])}]")
         elif en["kind"] in ("talk", "vo"):
             kept = sum(k["out"] - k["in"] for k in en["keeps"])
-            print(f"\n== {'VOICEOVER' if en['kind'] == 'vo' else 'TALK'} {en['src']}  [{describe(en['info'])}]  keeps {kept:.1f}s")
+            log(f"\n== {'VOICEOVER' if en['kind'] == 'vo' else 'TALK'} {en['src']}  [{describe(en['info'])}]  keeps {kept:.1f}s")
             ev = [("KEEP", k["in"], k["out"], f'"{k["text"]}"') for k in en["keeps"]]
             ev += [("cut ", r["in"], r["out"], r["why"]) for r in en["removed"]]
             for kind, i, o, txt in sorted(ev, key=lambda x: x[1]):
-                print(f"  {kind} {tc(i, 2)}-{tc(o, 2)}  {txt}")
+                log(f"  {kind} {tc(i, 2)}-{tc(o, 2)}  {txt}")
             for f in en["flags"]:
-                print(f"  ? {f}")
+                log(f"  ? {f}")
             if en["kind"] == "vo":
                 n_vo += 1
                 if en["clean"]:
-                    print(f"  cleaned: {voice.summary(en['clean'])}")
+                    log(f"  cleaned: {voice.summary(en['clean'])}")
                 pv = voice.preview(en["src"], en["keeps"], wd / f"vo_preview{'' if n_vo == 1 else '_' + str(n_vo)}.wav", cfg)
-                print(f"  listen: {rel(pv)}  (cleaned + cut, as it will sound)")
+                log(f"  listen: {rel(pv)}  (cleaned + cut, as it will sound)")
                 blk = E.vo_block(en["block"], 0.0, cfg)
-                print("  MATCH-UP (what you say -> what we see):")
+                log("  MATCH-UP (what you say -> what we see):")
                 for sh, (s0, e0, warn) in zip(en["block"]["shots"], E.vo_shots(blk, en["block"]["shots"])):
                     heard = " ".join(w["w"] for w in blk["words"] if s0 - 0.02 <= w["s"] < e0 - 0.02)
                     at = f" @{tc(sh['in'], 1)}" if "in" in sh else ""
-                    print(f"    {tc(s0, 1)}-{tc(e0, 1)}  {sh['src']}{at}  \"{heard}\"  <- {sh.get('why', '')}"
+                    log(f"    {tc(s0, 1)}-{tc(e0, 1)}  {sh['src']}{at}  \"{heard}\"  <- {sh.get('why', '')}"
                           + (f"  !! {warn}" if warn else ""))
         else:
             picked = [s for s in segs if s.get("src") == en["src"] and s.get("talk") is False]
             if picked or id(en) not in unused_ids:
-                print(f"  CLIP   {en['src']}  [{describe(en['info'])}]  usable {en['usable']:.1f}s, "
+                log(f"  CLIP   {en['src']}  [{describe(en['info'])}]  usable {en['usable']:.1f}s, "
                       f"picked {', '.join(tc(s['in'], 1) for s in picked) or ('under the voiceover' if en.get('used') else 'nothing')}")
     for b in broll:
-        print(f"  CUTAWAY {b['src']} over the talking when you say \"{b['cue']}\" ({b['dur']:.1f}s)")
+        log(f"  CUTAWAY {b['src']} over the talking when you say \"{b['cue']}\" ({b['dur']:.1f}s)")
     for n in notes:
-        print(f"  ! {n}")
+        log(f"  ! {n}")
     ids = {id(x) for x in entries}
     pool = [x for x in entries if x["kind"] in ("moments", "photo")] + \
         [c["entry"] for c in cues if c.get("entry") and id(c["entry"]) not in ids]
@@ -620,11 +623,29 @@ def main():
         board = contact_sheet.board([(x["src"], None if x["kind"] == "photo" else
                                       (moments.windows(x["an"], 0.5, 1, True, *x["range"]) or [{"in": x["range"][0]}])[0]["in"])
                                      for x in pool], wd / "broll.jpg")
-        print(f"  B-roll overview (one frame per clip, for matching clips to what's said): {rel(board)}")
+        log(f"  B-roll overview (one frame per clip, for matching clips to what's said): {rel(board)}")
+    step("draft", 95)
     out = write_json(wd / "edl.draft.json", edl)
-    print(f"\n{sum(len(s['shots']) if is_vo(s) else 1 for s in segs)} shots, talking {talk_total:.1f}s"
+    log(f"\n{sum(len(s['shots']) if is_vo(s) else 1 for s in segs)} shots, talking {talk_total:.1f}s"
           + (f", cuts every {every} beat(s)" if beat_sync else ""))
-    print(f"draft -> {rel(out)}   (review, add labels/text, save as edl.json)")
+    log(f"draft -> {rel(out)}   (review, add labels/text, save as edl.json)")
+    return edl
+
+
+def main():
+    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--name", required=True, help="video name, e.g. oct-dump")
+    ap.add_argument("clips", nargs="+", help="raw/file.mp4, raw/file.mp4@0:05-0:12, raw/photo.heic, a folder, "
+                                             "or voiceover/vo.m4a where the voiceover goes")
+    ap.add_argument("--preset", help="content type (default: from the brief)")
+    ap.add_argument("--talk", choices=["yes", "no", "some", "voiceover", "mixed"],
+                    help="talking in this video? (default: brief/preset)")
+    ap.add_argument("--vo", nargs="*", help="voiceover file(s), file@0:00-0:20 ok (default: from the brief)")
+    ap.add_argument("--music", help="music track (default: from the brief)")
+    ap.add_argument("--length", type=float, help="target length in seconds")
+    ap.add_argument("--max-pause", type=float, help="longest pause kept inside a phrase (s)")
+    a = ap.parse_args()
+    draft(a.name, a.clips, a.preset, a.talk, a.vo, a.music, a.length, a.max_pause)
 
 
 if __name__ == "__main__":

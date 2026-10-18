@@ -15,9 +15,9 @@ import subprocess
 import cv2
 import numpy as np
 
-from common import ROOT, cache_dir, ffprobe, file_key, read_json, rel, resolve, write_json
+from .common import cache_dir, ffprobe, file_key, read_json, rel, resolve, write_json
+from .config import log, paths
 
-MODEL = ROOT / "scripts/models/face_detection_yunet_2023mar.onnx"
 SAMPLE_FPS = 8
 DET_W = 640
 
@@ -45,7 +45,7 @@ def still_face(img):
     s = DET_W / max(h, w)
     small = cv2.resize(img, (int(w * s), int(h * s)), interpolation=cv2.INTER_AREA) if s < 1 else img
     sh, sw = small.shape[:2]
-    det = cv2.FaceDetectorYN.create(str(MODEL), "", (sw, sh), 0.6, 0.3, 50)
+    det = cv2.FaceDetectorYN.create(str(paths().face_model), "", (sw, sh), 0.6, 0.3, 50)
     _, faces = det.detect(small)
     if faces is None or not len(faces):
         return None
@@ -60,7 +60,7 @@ def detect(src, info):
     for t, img in _frames(src, info, SAMPLE_FPS):
         h, w = img.shape[:2]
         if det is None:
-            det = cv2.FaceDetectorYN.create(str(MODEL), "", (w, h), 0.6, 0.3, 50)
+            det = cv2.FaceDetectorYN.create(str(paths().face_model), "", (w, h), 0.6, 0.3, 50)
         _, faces = det.detect(img)
         best = None
         if faces is not None and len(faces):
@@ -145,10 +145,10 @@ def main():
     for c in a.clips:
         tr = track_for(c, a.force)
         if not tr:
-            print(f"{c}: no face found -> centre crop")
+            log(f"{c}: no face found -> centre crop")
             continue
         xs = np.array(tr["x"])
-        print(f"{c}: face in {tr['coverage'] * 100:.0f}% of samples, x range {xs.min():.2f}-{xs.max():.2f}")
+        log(f"{c}: face in {tr['coverage'] * 100:.0f}% of samples, x range {xs.min():.2f}-{xs.max():.2f}")
         if a.preview:
             info = ffprobe(c)
             mid = tr["t"][len(tr["t"]) // 2]
@@ -160,7 +160,7 @@ def main():
                 cv2.line(img, p0, p1, (0, 255, 255), 2)
             out = cache_dir("tracks") / f"{file_key(c)}_preview.jpg"
             cv2.imwrite(str(out), img)
-            print(f"  preview -> {rel(out)}")
+            log(f"  preview -> {rel(out)}")
 
 
 if __name__ == "__main__":

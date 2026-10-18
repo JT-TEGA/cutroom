@@ -14,8 +14,8 @@ import subprocess
 import cv2
 import numpy as np
 
-from common import cache_dir, ffprobe, file_key, read_json, resolve, tc, write_json
-from facetrack import MODEL
+from .common import cache_dir, ffprobe, file_key, read_json, resolve, tc, write_json
+from .config import log, paths
 
 FPS = 10
 SHORT = 288          # analysis size: short side in px
@@ -96,7 +96,7 @@ def analyse(src, force=False):
         prev = g
         if i % 5 == 0:   # faces at 2 fps
             if det is None:
-                det = cv2.FaceDetectorYN.create(str(MODEL), "", (g.shape[1], g.shape[0]), 0.6, 0.3, 20)
+                det = cv2.FaceDetectorYN.create(str(paths().face_model), "", (g.shape[1], g.shape[0]), 0.6, 0.3, 20)
             _, faces = det.detect(cv2.cvtColor(g, cv2.COLOR_GRAY2BGR))
             face.append(1.0 if faces is not None and len(faces) else 0.0)
         else:
@@ -186,9 +186,9 @@ def main():
     a = ap.parse_args()
     for c in a.clips:
         d = analyse(c)
-        print(f"== {c}: {d['duration']:.1f}s, usable {usable_seconds(d, a.shake_ok):.1f}s")
+        log(f"== {c}: {d['duration']:.1f}s, usable {usable_seconds(d, a.shake_ok):.1f}s")
         for w in windows(d, a.len, a.n, a.shake_ok):
-            print(f"  {tc(w['in'], 2)}-{tc(w['out'], 2)}  score {w['score']:+.2f}  audio {w['loud_db']} dB")
+            log(f"  {tc(w['in'], 2)}-{tc(w['out'], 2)}  score {w['score']:+.2f}  audio {w['loud_db']} dB")
 
 
 if __name__ == "__main__":

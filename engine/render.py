@@ -16,6 +16,7 @@ import argparse
 import hashlib
 import json
 import math
+import os
 import re
 import shutil
 import subprocess
@@ -25,14 +26,27 @@ import wave
 import cv2
 import numpy as np
 
-import contact_sheet
-import edl as E
-import voice
-from common import (FF, OUTPUT, ROOT, die, ffprobe, file_key, need, rel, resolve, run, style_for, tc, work_dir,
-                    write_json)
-from facetrack import at as face_at
-from facetrack import still_face, track_for
-from media import is_image, photo_path
+from . import contact_sheet, voice
+from . import edl as E
+from .common import (
+    FF,
+    die,
+    ffprobe,
+    file_key,
+    need,
+    rel,
+    resolve,
+    run,
+    run_streaming,
+    style_for,
+    tc,
+    work_dir,
+    write_json,
+)
+from .config import layout, log, paths, step
+from .facetrack import at as face_at
+from .facetrack import still_face, track_for
+from .media import is_image, photo_path
 
 VERSION = 3          # bump to invalidate cached segments after changing render code
 SR = 48000
@@ -123,7 +137,7 @@ def _decode(src, info, t_in, span, dec_fps, size):
             p.kill()
             p.wait()
         if got == 0 and attempt + 1 < len(cmds):
-            print(f"    ! HDR tone-mapping failed for {src}, falling back to plain conversion")
+            log(f"    ! HDR tone-mapping failed for {src}, falling back to plain conversion")
             continue
         if got == 0:
             raise RuntimeError(f"could not decode {src} at {t_in:.2f}s: {p.stderr.read().decode()[-400:]}")
@@ -457,7 +471,7 @@ WEIGHTS = {"thin": 100, "extralight": 200, "light": 300, "regular": 400, "medium
 
 def font_faces():
     faces = []
-    for f in sorted((ROOT / "assets/fonts").glob("*")):
+    for f in sorted(paths().fonts.glob("*")):
         if f.suffix.lower() not in (".ttf", ".otf", ".woff", ".woff2"):
             continue
         family = re.split(r"[-\[_]", f.stem)[0]
@@ -525,14 +539,24 @@ def overlay_spec(edl, items, cfg, total_frames):
 def render_overlay(spec, wd):
     od = wd / "overlay"
     od.mkdir(exist_ok=True)
-    code = [(ROOT / "scripts/overlay/overlay.html").read_text(), (ROOT / "scripts/render_overlays.js").read_text()]
+    html, js = paths().overlay / "overlay.html", paths().overlay / "render_overlays.js"
+    code = [html.read_text(), js.read_text()]
     key = h([spec, code])
     frames = od / "frames"
     if (od / "done").exists() and (od / "done").read_text() == key and (frames / "f_00000.png").exists():
-        print("  overlay: cached")
+        log("  overlay: cached")
         return frames
     write_json(od / "spec.json", spec)
-    subprocess.run(["node", str(ROOT / "scripts/render_overlays.js"), str(od / "spec.json"), str(frames)], check=True)
+    env = dict(os.environ, NODE_PATH=str(paths().root / "node_modules"))
+    n = max(1, spec["frames"])
+
+    def on_line(line):
+        m = re.search(r"overlay frame (\d+)/(\d+)", line)
+        if m:
+            step("overlay", 65 + 15 * int(m.group(1)) / n)
+        else:
+            log(line)
+    run_streaming(["node", js, od / "spec.json", frames], on_line=on_line, cwd=str(paths().root), env=env)
     (od / "done").write_text(key)
     return frames
 
@@ -731,7 +755,7 @@ def grade_chain(cfg):
     return chain
 
 
-def export(name, wd, seg_mp4s, overlay_dir, broll, graphics, audio, cfg, total_frames, draft):
+def export(out, wd, seg_mp4s, overlay_dir, broll, graphics, audio, cfg, total_frames, draft):
     fps = cfg["fps"]
     lst = wd / "segments.txt"
     lst.write_text("".join(f"file '{p.resolve()}'\n" for p in seg_mp4s))
@@ -761,8 +785,6 @@ def export(name, wd, seg_mp4s, overlay_dir, broll, graphics, audio, cfg, total_f
     g.append("[1:v]format=rgba,scale=out_color_matrix=bt709:out_range=tv,format=yuva444p[ov]")
     g.append(f"[{cur}][ov]overlay=0:0:format=yuv444:eof_action=pass,format=yuv420p,{TAG709}[vout]")
     inputs += ["-i", audio]
-    out = OUTPUT / f"{name}.mp4"
-    archive(name, wd)
     preset, crf = ("veryfast", 23) if draft else ("medium", cfg["video_crf"])
     run(FF + inputs + ["-filter_complex", ";".join(g), "-map", "[vout]", "-map", f"{idx}:a",
                        "-frames:v", str(total_frames), "-r", str(fps),
@@ -772,37 +794,44 @@ def export(name, wd, seg_mp4s, overlay_dir, broll, graphics, audio, cfg, total_f
     return out
 
 
-def archive(name, wd):
-    """Keep previous renders so revisions can be compared (work/<name>/versions/)."""
-    out = OUTPUT / f"{name}.mp4"
-    if not out.exists():
-        return
-    vd = wd / "versions"
-    vd.mkdir(exist_ok=True)
-    n = len(list(vd.glob(f"{name}_v*.mp4"))) + 1
-    shutil.move(out, vd / f"{name}_v{n}.mp4")
-    sheet = OUTPUT / f"{name}_contact.jpg"
-    if sheet.exists():
-        shutil.move(sheet, vd / f"{name}_v{n}_contact.jpg")
+def targets(name, wd):
+    """Where this render goes -> (video, contact sheet, version or None).
+
+    CLI layout: output/<name>.mp4, the previous one archived to work/<name>/versions/ (as before).
+    Project layout: a fresh output/vN/ folder per render, so every version stays playable."""
+    lay = layout()
+    if lay.versioned:
+        nums = [int(d.name[1:]) for d in lay.output.glob("v*") if d.is_dir() and d.name[1:].isdigit()]
+        n = max(nums, default=0) + 1
+        vd = lay.output / f"v{n}"
+        vd.mkdir(parents=True, exist_ok=True)
+        return vd / f"{name}_v{n}.mp4", vd / "contact.jpg", n
+    lay.output.mkdir(parents=True, exist_ok=True)
+    out = lay.output / f"{name}.mp4"
+    if out.exists():
+        vd = wd / "versions"
+        vd.mkdir(exist_ok=True)
+        n = len(list(vd.glob(f"{name}_v*.mp4"))) + 1
+        shutil.move(out, vd / f"{name}_v{n}.mp4")
+        sheet = lay.output / f"{name}_contact.jpg"
+        if sheet.exists():
+            shutil.move(sheet, vd / f"{name}_v{n}_contact.jpg")
+    return out, lay.output / f"{name}_contact.jpg", None
 
 
 # ------------------------------------------------------------------ main
 
-def main():
-    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("name")
-    ap.add_argument("--draft", action="store_true")
-    ap.add_argument("--no-sheet", action="store_true")
-    a = ap.parse_args()
+def render(name, draft=False, sheet=True):
+    """Render work/<name>/edl.json (or the project's plan) -> dict with the output paths, duration and audio notes."""
     need("ffmpeg")
     need("node")
     t_start = time.time()
-    name = a.name
+    step("prepare", 1)
     wd = work_dir(name)
     edl = E.load(name)
     problems = E.validate(edl)
     if problems:
-        die("edit plan has problems:\n  - " + "\n  - ".join(problems))
+        die("edit plan has problems:\n  - " + "\n  - ".join(problems), code="invalid_plan", status=422)
     cfg = style_for(edl)
     W, H, fps = cfg["width"], cfg["height"], cfg["fps"]
     items, grid = E.build_timeline(edl, cfg)
@@ -810,22 +839,23 @@ def main():
         edl["music"]["_start"] = grid["start"]
         edl["music"]["at"] = grid["at"]
     total_frames = items[-1]["f0"] + items[-1]["frames"]
-    print(f"render {name}: {len(items)} shots, {total_frames / fps:.2f}s, {W}x{H}@{fps}"
+    log(f"render {name}: {len(items)} shots, {total_frames / fps:.2f}s, {W}x{H}@{fps}"
           + (f", preset {edl['preset']}" if edl.get("preset") else "")
           + (f", music {grid['bpm']} BPM from {tc(grid['start'])}" if grid else ""))
     for it in items:
         if it.get("warn"):
-            print(f"  ! #{it['idx']}: {it['warn']}")
+            log(f"  ! #{it['idx']}: {it['warn']}")
 
     # 1. shots
     sd = work_dir(name, "segments")
     seg_mp4s, seg_wavs, roles, prev_mp4 = [], [], [], None
     look = {k: cfg[k] for k in ("kenburns", "handheld", "photo_fit", "compare_mode")}
     for k, it in enumerate(items):
+        step(f"shot {k + 1}/{len(items)}", 3 + 57 * k / len(items))
         nxt = items[k + 1] if k + 1 < len(items) else None
         trans_out = nxt["trans_in"] if nxt and nxt["trans_in"] in ("whip", "zoom") else None
         seg = {kk: v for kk, v in it["seg"].items()
-               if kk not in ("label", "text", "note", "captions", "labels", "why", "cue", "at")}
+               if kk not in ("label", "text", "note", "captions", "labels", "why", "reason", "cue", "at")}
         if it["kind"] in ("clip", "image"):
             src_key = file_key(it["src"])
         elif it["kind"] == "compare":
@@ -850,7 +880,7 @@ def main():
             tmp = mp4.with_suffix(".tmp.mp4")
             render_video(it, tmp, cfg, still, trans_out)
             tmp.rename(mp4)
-            print(f"  {label}: {it['frames']} frames in {time.time() - t0:.1f}s")
+            log(f"  {label}: {it['frames']} frames in {time.time() - t0:.1f}s")
         if not wav.exists():
             render_audio(it, wav, cfg, role)
         seg_mp4s.append(mp4)
@@ -858,6 +888,7 @@ def main():
         prev_mp4 = mp4
 
     broll = []
+    step("b-roll", 60)
     for k, b in enumerate(edl.get("broll", [])):
         span = dict(b)
         if "out" in b and "dur" not in b and "end" not in b:
@@ -874,7 +905,7 @@ def main():
             tmp = mp4.with_suffix(".tmp.mp4")
             render_video(it, tmp, cfg)
             tmp.rename(mp4)
-            print(f"  broll {b['src']} @ {tc(s)}: {n} frames")
+            log(f"  broll {b['src']} @ {tc(s)}: {n} frames")
         broll.append((mp4, s, s + n / fps))
 
     graphics = []
@@ -884,22 +915,34 @@ def main():
         graphics.append(gr | {"s": s, "e": e})
 
     # 2. overlay layer
+    step("overlay", 65)
     spec = overlay_spec(edl, items, cfg, total_frames)
     write_json(wd / "captions.json", spec["captions"])
     overlay_dir = render_overlay(spec, wd)
 
     # 3. audio
+    step("audio", 80)
     audio, anotes = mix_audio(edl, items, cfg, seg_wavs, roles, wd, total_frames)
 
     # 4. export
-    out = export(name, wd, seg_mp4s, overlay_dir, broll, graphics, audio, cfg, total_frames, a.draft)
+    step("export", 88)
+    out, sheet_path, version = targets(name, wd)
+    try:
+        export(out, wd, seg_mp4s, overlay_dir, broll, graphics, audio, cfg, total_frames, draft)
+    except BaseException:
+        if version is not None:
+            shutil.rmtree(out.parent, ignore_errors=True)
+        raise
     info = ffprobe(out)
     ec = next((it for it in items if it["kind"] == "endcard"), None)
-    sheet = None
-    if not a.no_sheet:
-        sheet, _ = contact_sheet.make(out, OUTPUT / f"{name}_contact.jpg", end_card=(ec["end"] - ec["start"]) if ec else 0)
-    write_json(wd / "render.json", {
-        "output": rel(out), "duration": info["duration"], "audio": anotes, "grade": cfg["grade"],
+    sheet_out = None
+    if sheet:
+        step("contact sheet", 97)
+        sheet_out, _ = contact_sheet.make(out, sheet_path, end_card=(ec["end"] - ec["start"]) if ec else 0)
+    result = {
+        "output": rel(out), "contact_sheet": rel(sheet_out) if sheet_out else None, "version": version,
+        "draft": draft, "size_bytes": out.stat().st_size, "elapsed_s": round(time.time() - t_start, 1),
+        "duration": info["duration"], "audio": anotes, "grade": cfg["grade"],
         "music_start": grid["start"] if grid else None, "bpm": grid["bpm"] if grid else None,
         "beats": [b for b in grid["beats"] if b <= info["duration"]] if grid else [],
         "drops": grid["drops"] if grid else [],
@@ -908,18 +951,33 @@ def main():
                      | {"role": r, "ramp": bool(it["ramp"]), "voiceover": it["vo"]["src"] if it.get("vo") else None}
                      for it, r in zip(items, roles)],
         "caption_pages": len(spec["captions"]), "texts": len(spec["texts"]),
-    })
+    }
+    write_json(wd / "render.json", result)
+    if version is not None:
+        write_json(out.parent / "render.json", result)
+        shutil.copy2(wd / "edl.json", out.parent / "edl.json")
     mb = out.stat().st_size / 1e6
-    print(f"\ndone in {time.time() - t_start:.0f}s -> {rel(out)}  ({info['duration']:.2f}s, {mb:.1f} MB)")
-    if sheet:
-        print(f"contact sheet -> {rel(sheet)}")
+    log(f"\ndone in {time.time() - t_start:.0f}s -> {rel(out)}  ({info['duration']:.2f}s, {mb:.1f} MB)")
+    if sheet_out:
+        log(f"contact sheet -> {rel(sheet_out)}")
     lv = anotes.get("voice_lufs")
     vn = anotes.get("voiceover")
-    print(f"audio: voice {'%.1f LUFS' % lv if lv else 'none'}"
+    log(f"audio: voice {'%.1f LUFS' % lv if lv else 'none'}"
           + (f" (incl. voiceover{', cleaned' if vn['cleaned'] else ''})" if vn else "")
           + (", ambient on" if anotes.get("ambient_lufs") else "")
           + (f", music {'ducked under voice' if anotes.get('ducked') else 'lead'}" if "music_lufs" in anotes else "")
           + f", {anotes['sfx']} sfx, normalised to {cfg['loudness_lufs']} LUFS; grade {cfg['grade']}")
+    step("done", 100)
+    return result
+
+
+def main():
+    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("name")
+    ap.add_argument("--draft", action="store_true")
+    ap.add_argument("--no-sheet", action="store_true")
+    a = ap.parse_args()
+    render(a.name, draft=a.draft, sheet=not a.no_sheet)
 
 
 if __name__ == "__main__":

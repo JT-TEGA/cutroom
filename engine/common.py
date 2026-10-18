@@ -1,6 +1,7 @@
 """Shared helpers for the short-form creator pipeline.
 
 Settings resolve in layers: DEFAULTS < brand.md < presets/<content type>.md < edl.json "style".
+Paths come from engine.config: shared resources from ``paths()``, one video's files from ``layout()``.
 
 Rule: never import cv2 and faster_whisper in the same process (both bundle
 their own libav and macOS complains). Transcription lives in transcribe.py
@@ -10,18 +11,10 @@ import hashlib
 import json
 import os
 import re
-import shutil
 import subprocess
-import sys
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent.parent
-SCRIPTS = ROOT / "scripts"
-WORK = ROOT / "work"
-CACHE = WORK / "_cache"
-OUTPUT = ROOT / "output"
-PRESETS = ROOT / "presets"
-PY = sys.executable
+from .config import PY, EngineError, layout, log, paths, subprocess_env, which
 
 # Fallbacks if brand.md is missing a key.
 DEFAULTS = {
@@ -59,31 +52,38 @@ DEFAULTS = {
 LIST_KEYS = {"fillers", "vocab", "kb_moves"}
 
 
-def die(msg, code=1):
-    print(f"ERROR: {msg}", file=sys.stderr)
-    sys.exit(code)
+def die(msg, code="engine_error", status=400, hint=None):
+    raise EngineError(msg, code=code, status=status, hint=hint)
 
 
 def resolve(p):
+    """A media path from a brief / edit plan -> absolute path. Relative paths are relative to the active layout
+    (the repo for the CLI, the project folder for the app); "assets/..." falls back to the shared assets."""
     p = Path(p).expanduser()
-    return p if p.is_absolute() else ROOT / p
+    if p.is_absolute():
+        return p
+    q = layout().base / p
+    if not q.exists() and p.parts[:1] == ("assets",) and len(p.parts) > 1:
+        shared = {"sfx": paths().sfx, "fonts": paths().fonts}.get(p.parts[1])
+        return shared.joinpath(*p.parts[2:]) if shared else paths().root / p
+    return q
 
 
 def rel(p):
     try:
-        return os.path.relpath(Path(p).resolve(), ROOT)
+        return os.path.relpath(Path(p).resolve(), layout().base)
     except ValueError:
         return str(p)
 
 
 def work_dir(name, *sub):
-    d = WORK.joinpath(name, *sub)
+    d = layout().work(name).joinpath(*sub)
     d.mkdir(parents=True, exist_ok=True)
     return d
 
 
 def cache_dir(*sub):
-    d = CACHE.joinpath(*sub)
+    d = layout().cache.joinpath(*sub)
     d.mkdir(parents=True, exist_ok=True)
     return d
 
@@ -106,7 +106,9 @@ def read_json(path, default=None):
 def write_json(path, data):
     p = resolve(path)
     p.parent.mkdir(parents=True, exist_ok=True)
-    p.write_text(json.dumps(data, indent=2, ensure_ascii=False))
+    tmp = p.with_name(p.name + ".tmp")
+    tmp.write_text(json.dumps(data, indent=2, ensure_ascii=False))
+    tmp.replace(p)
     return p
 
 
@@ -162,7 +164,7 @@ def _coerce(key, val):
 
 def load_settings(path):
     """The ```settings block of a markdown file (brand.md or a preset) as a dict."""
-    p = resolve(path)
+    p = Path(path)
     out = {}
     if not p.exists():
         return out
@@ -178,22 +180,22 @@ def load_settings(path):
     return out
 
 
-def load_brand(path="brand.md"):
+def load_brand(path=None):
     cfg = dict(DEFAULTS)
-    cfg.update(load_settings(path))
+    cfg.update(load_settings(path or paths().brand))
     return cfg
 
 
 def list_presets():
-    return sorted(p.stem for p in PRESETS.glob("*.md"))
+    return sorted(p.stem for p in paths().presets.glob("*.md") if not p.name.startswith("_"))
 
 
 def load_preset(name):
     if not name:
         return {}
-    p = PRESETS / f"{name}.md"
+    p = paths().presets / f"{name}.md"
     if not p.exists():
-        die(f"unknown content type {name!r}. Presets: {', '.join(list_presets())}")
+        die(f"unknown content type {name!r}. Presets: {', '.join(list_presets())}", code="unknown_preset")
     return load_settings(p)
 
 
@@ -210,20 +212,59 @@ def style_for(edl):
 
 # ---------------------------------------------------------------- processes
 
+class CommandError(EngineError):
+    code = "command_failed"
+    status = 500
+
+
 def run(cmd, quiet=True, check=True, capture=True):
     cmd = [str(c) for c in cmd]
     if not quiet:
-        print("  $", " ".join(cmd[:12]) + (" ..." if len(cmd) > 12 else ""), flush=True)
-    r = subprocess.run(cmd, capture_output=capture, text=True)
+        log("  $", " ".join(cmd[:12]) + (" ..." if len(cmd) > 12 else ""), flush=True)
+    try:
+        r = subprocess.run(cmd, capture_output=capture, text=True)
+    except FileNotFoundError:
+        need(cmd[0])
+        raise
     if check and r.returncode != 0:
         tail = (r.stderr or "")[-2500:]
-        raise RuntimeError(f"command failed ({r.returncode}): {' '.join(cmd[:8])} ...\n{tail}")
+        raise CommandError(f"command failed ({r.returncode}): {' '.join(cmd[:8])} ...\n{tail}")
     return r
 
 
+def run_streaming(cmd, on_line=None, cwd=None, env=None):
+    """Run a command, passing each output line (stdout + stderr) to on_line (default: log). Raises on failure."""
+    cmd = [str(c) for c in cmd]
+    try:
+        p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1,
+                             cwd=cwd, env=env)
+    except FileNotFoundError:
+        need(cmd[0])
+        raise
+    tail = []
+    for raw in p.stdout:
+        for line in raw.replace("\r", "\n").splitlines():
+            if not line.strip():
+                continue
+            tail = (tail + [line])[-40:]
+            (on_line or log)(line.rstrip())
+    p.wait()
+    if p.returncode != 0:
+        raise CommandError(f"command failed ({p.returncode}): {' '.join(cmd[:6])} ...\n" + "\n".join(tail[-15:]))
+    return p.returncode
+
+
+INSTALL_HINTS = {
+    "ffmpeg": "Install it with `brew install ffmpeg`.",
+    "ffprobe": "It comes with ffmpeg: `brew install ffmpeg`.",
+    "node": "Install Node.js with `brew install node`, then run `npm install` in the repo.",
+}
+
+
 def need(binary):
-    if not shutil.which(binary):
-        die(f"{binary} not found. Run scripts/setup.sh")
+    if not which(binary):
+        die(f"{binary} not found. {INSTALL_HINTS.get(binary, 'Run scripts/setup.sh')}", code=f"{binary}_missing",
+            status=503, hint=INSTALL_HINTS.get(binary))
 
 
 FF = ["ffmpeg", "-hide_banner", "-loglevel", "error", "-y"]
@@ -232,7 +273,13 @@ FF = ["ffmpeg", "-hide_banner", "-loglevel", "error", "-y"]
 def ffprobe(path):
     """Normalised media info. Width/height are display size (rotation applied)."""
     p = resolve(path)
-    r = run(["ffprobe", "-v", "error", "-print_format", "json", "-show_format", "-show_streams", p])
+    if not p.exists():
+        die(f"file not found: {rel(p)}", code="file_not_found", status=404)
+    try:
+        r = run(["ffprobe", "-v", "error", "-print_format", "json", "-show_format", "-show_streams", p])
+    except CommandError as e:
+        die(f"can't read {p.name}: not a media file ffmpeg understands", code="unsupported_media", status=422,
+            hint=str(e).splitlines()[-1][:200])
     d = json.loads(r.stdout)
     v = next((s for s in d["streams"] if s["codec_type"] == "video"), None)
     a = next((s for s in d["streams"] if s["codec_type"] == "audio"), None)
@@ -293,12 +340,21 @@ def transcript_path(src):
     return cache_dir("transcripts") / f"{file_key(src)}.json"
 
 
+def transcribe_subprocess(srcs, model=None, show=False, force=False):
+    """Run engine.transcribe in a subprocess (it loads faster-whisper, which must not share a process with cv2)."""
+    cmd = [PY, "-m", "engine.transcribe", *[str(resolve(s)) for s in srcs]]
+    if model:
+        cmd += ["--model", model]
+    if show:
+        cmd.append("--show")
+    if force:
+        cmd.append("--force")
+    run_streaming(cmd, cwd=str(paths().root), env=subprocess_env())
+
+
 def load_transcript(src, auto=True, model=None):
     """Return cached transcript, running transcribe.py in a subprocess if needed."""
     p = transcript_path(src)
     if not p.exists() and auto:
-        cmd = [PY, SCRIPTS / "transcribe.py", src]
-        if model:
-            cmd += ["--model", model]
-        subprocess.run([str(c) for c in cmd], check=True)
+        transcribe_subprocess([src], model=model)
     return read_json(p)

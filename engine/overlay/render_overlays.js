@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Render the overlay layer (captions, text, flashes, end card) to a transparent PNG sequence.
-//   node scripts/render_overlays.js work/<name>/overlay/spec.json work/<name>/overlay/frames
+//   node engine/overlay/render_overlays.js work/<name>/overlay/spec.json work/<name>/overlay/frames
 // Only frames whose content changes are screenshotted; the rest are hard links,
 // so ffmpeg can read a plain f_00000.png ... sequence at the project fps.
 const fs = require('fs');
@@ -27,7 +27,7 @@ const puppeteer = require('puppeteer');
     page.on('console', m => { if (m.type() === 'error') console.error('[page]', m.text()); });
     page.on('pageerror', e => console.error('[page error]', e.message));
     await page.setViewport({ width: spec.width, height: spec.height, deviceScaleFactor: 1 });
-    await page.goto(pathToFileURL(path.join(__dirname, 'overlay', 'overlay.html')).href);
+    await page.goto(pathToFileURL(path.join(__dirname, 'overlay.html')).href);
     await page.evaluate(s => window.setup(s), spec);
 
     const keys = await page.evaluate(n => window.allKeys(n), spec.frames);
