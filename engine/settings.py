@@ -81,7 +81,7 @@ class AppSettings(BaseModel):
     brain_effort: Literal["low", "medium", "high", "xhigh", "max"] | None = None
     brain_timeout_s: int = Field(300, ge=30, le=1800)
     brain_max_turns: int = Field(6, ge=1, le=30)
-    anthropic_model: str = Field("claude-opus-5-5", description="model for the anthropic-api backend")
+    anthropic_model: str = Field("claude-sonnet-5-5", description="model for the anthropic-api backend")
 
 
 class Settings(BaseModel):

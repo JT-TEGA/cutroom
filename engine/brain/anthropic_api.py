@@ -36,7 +36,7 @@ def api_key() -> str | None:
 class AnthropicAPIBrain(Brain):
     name = "anthropic-api"
 
-    def __init__(self, model: str = "claude-opus-5-5", effort: str | None = "high"):
+    def __init__(self, model: str = "claude-sonnet-5-5", effort: str | None = "high"):
         self.model = model
         self.effort = effort
 

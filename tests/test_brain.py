@@ -151,3 +151,11 @@ def test_api_backend_without_key_explains(tmp_path) -> None:
         AnthropicAPIBrain().complete(req(tmp_path))
     assert e.value.code == "api_key_missing" and ".env" in e.value.hint
     assert AnthropicAPIBrain().status()["ready"] is False
+
+
+def test_api_backend_model_defaults_to_sonnet_and_follows_settings() -> None:
+    from engine import settings as S
+    from engine.brain import get_brain
+    assert get_brain(S.AppSettings(brain_backend="anthropic-api")).model == "claude-sonnet-5-5"
+    S.save(S.SettingsUpdate(app={"brain_backend": "anthropic-api", "anthropic_model": "claude-opus-5-5"}))
+    assert get_brain().model == "claude-opus-5-5"

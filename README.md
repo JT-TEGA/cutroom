@@ -69,6 +69,7 @@ with their duration to the project's `work/jobs.log`. Failures come back as clea
 installed*, *not logged in*, *usage limit reached (resets …)*, *timed out*.
 
 An `AnthropicAPIBrain` backend (API key in `.env`) sits behind the same interface for people without Claude Code.
+It uses Claude Sonnet 5.5 (`claude-sonnet-5-5`) unless `anthropic_model` in the app settings says otherwise.
 
 ---
 
