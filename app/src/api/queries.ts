@@ -1,4 +1,4 @@
-import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
+import { keepPreviousData, useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { api, call, uploadFiles } from "./client"
 import type { Brief, Job, JobKind, Project, ProjectFile, Settings, Timeline, TimelineView } from "./types"
 
@@ -8,6 +8,10 @@ export const keys = {
   timeline: (id: string) => ["timeline", id] as const,
   outputs: (id: string) => ["outputs", id] as const,
   voiceover: (id: string) => ["voiceover", id] as const,
+  music: (id: string, fileId?: string) => ["music", id, fileId ?? ""] as const,
+  photosStatus: ["photos", "status"] as const,
+  photosAlbums: ["photos", "albums"] as const,
+  photosItems: (f: PhotoFilter) => ["photos", "items", f] as const,
   jobs: (projectId?: string) => ["jobs", projectId ?? "all"] as const,
   job: (id: string) => ["job", id] as const,
   presets: ["presets"] as const,
@@ -54,6 +58,90 @@ export function useVoiceover(id: string, enabled = true) {
     queryKey: keys.voiceover(id),
     queryFn: () => call(api.GET("/projects/{pid}/voiceover", { params: { path: { pid: id } } })),
     enabled,
+  })
+}
+
+/** The song for the Music step: waveform, BPM, drops, the auto start and the creator's own choices. */
+export function useMusic(id: string, fileId: string | undefined) {
+  return useQuery({
+    queryKey: keys.music(id, fileId),
+    queryFn: () => call(api.GET("/projects/{pid}/music", { params: { path: { pid: id } } })),
+    enabled: !!fileId,
+    retry: (n, e) => (e as { status?: number }).status !== 404 && n < 1,
+    staleTime: 30_000,
+  })
+}
+
+// ---------------------------------------------------------------- the Mac Photos library
+
+export type PhotoFilter = { album?: string; kind: "all" | "photo" | "video"; since?: string; until?: string; favorites?: boolean }
+const PHOTO_PAGE = 120
+
+/** Whether the library can be read; polls while it's being read. */
+export function usePhotosStatus(enabled: boolean) {
+  return useQuery({
+    queryKey: keys.photosStatus,
+    queryFn: () => call(api.GET("/photos/status")),
+    enabled,
+    refetchInterval: (q) => (q.state.data?.state === "loading" ? 800 : false),
+  })
+}
+
+export function usePhotosAlbums(enabled: boolean) {
+  return useQuery({ queryKey: keys.photosAlbums, queryFn: () => call(api.GET("/photos/albums")), enabled, staleTime: 60_000 })
+}
+
+export function usePhotoItems(f: PhotoFilter, enabled: boolean) {
+  return useInfiniteQuery({
+    queryKey: keys.photosItems(f),
+    queryFn: ({ pageParam }) =>
+      call(api.GET("/photos/items", {
+        params: {
+          query: {
+            album: f.album ?? null,
+            kind: f.kind,
+            since: f.since || null,
+            until: f.until || null,
+            favorites: !!f.favorites,
+            offset: pageParam,
+            limit: PHOTO_PAGE,
+          },
+        },
+      })),
+    initialPageParam: 0,
+    getNextPageParam: (last) => (last.offset + last.items.length < last.total ? last.offset + last.items.length : undefined),
+    enabled,
+    staleTime: 60_000,
+  })
+}
+
+export function useRefreshPhotos() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: () => call(api.POST("/photos/refresh")),
+    onSuccess: (st) => {
+      qc.setQueryData(keys.photosStatus, st)
+      qc.invalidateQueries({ queryKey: ["photos"] })
+    },
+  })
+}
+
+export function useOpenPrivacySettings() {
+  return useMutation({
+    mutationFn: (pane: "full_disk_access" | "photos" | "automation") => call(api.POST("/photos/open-settings", { body: { pane } })),
+  })
+}
+
+/** Import items from Photos into the project: a background job (follow it with useJobStream). */
+export function useImportPhotos(id: string) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (v: { ids: string[]; live_video: boolean }) =>
+      call(api.POST("/projects/{pid}/photos/import", { params: { path: { pid: id }, query: { wait: false } }, body: v })),
+    onSuccess: (job) => {
+      qc.setQueryData(keys.job(job.id), job)
+      qc.invalidateQueries({ queryKey: keys.jobs(id) })
+    },
   })
 }
 
@@ -180,7 +268,7 @@ export function useDeleteFile(id: string) {
 export function useStartJob(id: string) {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: async (v: { kind: JobKind; notes?: string; render?: boolean; draft?: boolean }): Promise<Job> => {
+    mutationFn: async (v: { kind: Exclude<JobKind, "photos-import">; notes?: string; render?: boolean; draft?: boolean }): Promise<Job> => {
       const path = { params: { path: { pid: id }, query: { wait: false } } }
       switch (v.kind) {
         case "analyse":

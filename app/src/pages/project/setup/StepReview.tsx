@@ -101,6 +101,8 @@ export function StepReview({ project, onEdit }: { project: Project; onEdit: (s: 
               <span className="inline-flex items-center gap-1.5">
                 <Music2 className="size-3.5 text-primary" />
                 {music.length ? music.map((m) => m.name).join(", ") : "no music"}
+                {music.length > 0 && b.music_start != null && ` · from ${clock(b.music_start)}`}
+                {music.length > 0 && b.music_in_app && " · you'll add it in the app when posting"}
               </span>
             </div>
           </Card>

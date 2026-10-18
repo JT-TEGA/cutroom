@@ -45,7 +45,7 @@ class _Album:
         self.uuid = stable_id("album:" + title)
         self.title = title
         self.photos = photos
-        self.folder_names = ["Shoots"] if title.lower() in ("bts", "night") else []
+        self.folder_names = ["Shoots"] if title.lower() in ("bts", "night out", "night") else []
 
 
 class _DB:
@@ -60,7 +60,8 @@ class _DB:
         for p in self._photos:
             if p._file.parent != root:
                 by_dir.setdefault(p._file.parent.name, []).append(p)
-        self.album_info = [_Album(name.replace("-", " ").capitalize(), ps) for name, ps in sorted(by_dir.items())]
+        title = lambda n: n.upper() if n.lower() == "bts" else n.replace("-", " ").capitalize()  # noqa: E731
+        self.album_info = [_Album(title(name), ps) for name, ps in sorted(by_dir.items())]
 
     def photos(self, images: bool = True, movies: bool = True) -> list[_Photo]:
         return [p for p in self._photos if (images and p.isphoto) or (movies and p.ismovie)]

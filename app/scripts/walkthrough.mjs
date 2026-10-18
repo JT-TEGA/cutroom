@@ -23,7 +23,8 @@ const OUT = path.join(repo, "docs/screenshots")
 const PAGES_ONLY = process.argv.includes("--pages-only")    // just settings, presets and projects
 const USAGE_LIMIT = process.argv.includes("--usage-limit")  // the server runs with CUTROOM_DEMO_FAIL=usage_limit
 const SWEEP_ONLY = process.argv.includes("--sweep-only")    // just the every-route sweep + the error screen
-const SKIP_SEED = PAGES_ONLY || SWEEP_ONLY || process.argv.includes("--no-seed")
+const PHOTOS_DENIED = process.argv.includes("--photos-denied")  // the server runs with CUTROOM_PHOTOS=denied
+const SKIP_SEED = PAGES_ONLY || SWEEP_ONLY || PHOTOS_DENIED || process.argv.includes("--no-seed")
 mkdirSync(OUT, { recursive: true })
 
 const log = (...a) => console.log("·", ...a)
@@ -93,6 +94,8 @@ async function seed() {
   })
   await upload(night.id, [1, 2, 3, 4, 5, 6].map((i) => m("night", `IMG_080${i}.jpg`)))
   await upload(night.id, [m("afro-drill-120.wav")], "music")
+  // posted with the song added in Instagram: the result shows the start time and the copy without music
+  await api(`/projects/${night.id}`, { method: "PATCH", body: JSON.stringify({ brief: { music_in_app: true } }) })
   await run(night.id, "plan")
   await run(night.id, "render")
   return { glow, legs, night, bts }
@@ -144,12 +147,21 @@ async function main() {
     await usageLimit()
     return finish(browser)
   }
+  if (PHOTOS_DENIED) {
+    await photosDenied()
+    return finish(browser)
+  }
   if (SWEEP_ONLY) {
     await page.goto(`${BASE}/`, { waitUntil: "networkidle0" })
     await sweep()
     return finish(browser)
   }
-  if (!PAGES_ONLY) await mainFlow()
+  if (!PAGES_ONLY) {
+    await mainFlow()
+    await songFlow()
+    await photosFlow()
+    await inAppResult()
+  }
 
   // 12. settings, presets, projects (innerText is what's on screen: eyebrows read in upper case)
   await page.goto(`${BASE}/settings`, { waitUntil: "networkidle0" })
@@ -191,6 +203,7 @@ async function sweep() {
   const projects = await api("/projects")
   const chest = projects.find((p) => p.name === "5AM chest day")
   const bts = projects.find((p) => p.name === "Studio shoot BTS")
+  const night = projects.find((p) => p.name === "Lekki night out")
   const job = (await api(`/jobs?project_id=${chest.id}`)).find((j) => j.status === "done")
   const paths = [
     "/", "/new", `/projects/${chest.id}`,
@@ -198,6 +211,7 @@ async function sweep() {
     `/projects/${chest.id}/questions`, `/projects/${chest.id}/plan`, `/projects/${chest.id}/video`,
     ...(job ? [`/projects/${chest.id}/jobs/${job.id}`] : []),
     `/projects/${bts.id}/plan`, `/projects/${bts.id}/video`, `/projects/${bts.id}/setup/media`,
+    ...(night ? [`/projects/${night.id}/video`, `/projects/${night.id}/setup/media`] : []),
     "/presets", "/presets/photo-dump", "/settings", "/no-such-page", "/projects/no-such-project",
   ]
   for (const p of paths) {
@@ -220,6 +234,84 @@ async function sweep() {
   })
   await assertNoErrorScreen(page, "after Go back from the error screen")
   log("error screen: shown for a crashing screen, Go back recovers")
+}
+
+/** Import from Photos (the demo's stand-in library): albums, multi-select, import into the BTS project. */
+async function photosFlow() {
+  const bts = (await api("/projects")).find((p) => p.name === "Studio shoot BTS")
+  const before = (await api(`/projects/${bts.id}/files`)).length
+  await go(page, `/projects/${bts.id}/setup/media`)
+  await click("Import from Photos")
+  await page.waitForSelector("[data-album='BTS']", { timeout: 30_000 })
+  await hop(page)                                    // the picker closes when the screen unmounts; open it again
+  await click("Import from Photos")
+  await page.waitForSelector("[data-album='BTS']", { timeout: 30_000 })
+  await press("[data-album='BTS']")
+  await page.waitForFunction(() => document.querySelectorAll("[data-photo]").length === 3, { timeout: 15_000 })
+  const tiles = await page.$$("[data-photo]")
+  await tiles[0].click()
+  await tiles[2].click()
+  await press("[data-album='Night']")
+  await page.waitForFunction(() => document.querySelectorAll("[data-photo]").length === 6, { timeout: 15_000 })
+  await (await page.$$("[data-photo]"))[1].click()
+  await page.waitForFunction(() => /^3\s+selected/.test(document.querySelector("[data-testid='photos-selected']")?.innerText ?? ""), { timeout: 5_000 })
+  await page.waitForFunction(() => [...document.querySelectorAll("img")].filter((i) => i.src.includes("/photos/thumbnail/")).every((i) => i.complete), { timeout: 15_000 }).catch(() => undefined)
+  await shot("03c-photos", 900)
+  await click("Import 3")
+  await waitText("Imported 3 items from Photos", 60_000)
+  const after = (await api(`/projects/${bts.id}/files`)).length
+  if (after !== before + 3) throw new Error(`import from Photos: expected ${before + 3} files, found ${after}`)
+  log("photos: picked 3 across two albums, imported into the project")
+  await hop(page)
+}
+
+/** The song on a 15s photo dump: the auto pick before the drop, playing from there; picking a start and back to auto. */
+async function songFlow() {
+  const night = (await api("/projects")).find((p) => p.name === "Lekki night out")
+  await go(page, `/projects/${night.id}/setup/media`)
+  await page.waitForSelector("[data-testid='waveform']", { timeout: 60_000 })
+  await page.evaluate(() => document.querySelector("[data-testid='music-panel']").scrollIntoView({ block: "center" }))
+  await waitText("Auto: two bars before the drop", 10_000)
+  await press("button[aria-label='Play from the start point']")
+  await sleep(1500)
+  await shot("03b-music", 200)
+  await press("button[aria-label='Pause']").catch(() => undefined)
+  const wave = await (await page.$("[data-testid='waveform']")).boundingBox()
+  await page.mouse.click(wave.x + wave.width * 0.5, wave.y + wave.height / 2)
+  await waitText("Your pick", 10_000)
+  const picked = await page.$eval("[data-testid='music-start']", (el) => el.textContent)
+  await sleep(800)
+  const b1 = (await api(`/projects/${night.id}`)).brief
+  if (typeof b1.music_start !== "number" || `0:${String(Math.round(b1.music_start)).padStart(2, "0")}` !== picked)
+    throw new Error(`the start point on screen (${picked}) wasn't saved (${b1.music_start})`)
+  await hop(page)
+  await waitText("Your pick", 20_000)                 // still there after leaving and coming back
+  await click("Auto")
+  await waitText("Auto: two bars before the drop", 10_000)
+  await sleep(800)
+  if ((await api(`/projects/${night.id}`)).brief.music_start !== null) throw new Error("Auto didn't clear the start point")
+  log(`song: picked ${picked}, saved; back to auto`)
+}
+
+/** A video posted with the in-app sound: the start time card and the two downloads. */
+async function inAppResult() {
+  const night = (await api("/projects")).find((p) => p.name === "Lekki night out")
+  await go(page, `/projects/${night.id}/video`)
+  await page.waitForSelector("[data-testid='in-app-card']", { timeout: 20_000 })
+  await idle()
+  await shot("21-result-in-app", 2000)
+  await hop(page)
+}
+
+/** With CUTROOM_PHOTOS=denied: the picker explains how to give access. */
+async function photosDenied() {
+  const p = (await api("/projects")).find((x) => x.name === "Studio shoot BTS")
+  await page.goto(`${BASE}/projects/${p.id}/setup/media`, { waitUntil: "networkidle0" })
+  await click("Import from Photos")
+  await page.waitForSelector("[data-testid='photos-access']", { timeout: 30_000 })
+  await shot("03d-photos-access", 900)
+  await click("Check again")
+  await page.waitForSelector("[data-testid='photos-access']", { timeout: 30_000 })
 }
 
 /** With the demo brain failing like Claude Code at its usage limit: the job's error and the banner. */
@@ -257,6 +349,10 @@ async function mainFlow() {
   await idle()
   await shot("03-media", 1500)
   await hop(page)
+
+  // a gym vlog is as long as this 48s song, so the song panel says it uses all of it (the photo dump picks a part)
+  await page.waitForSelector("[data-testid='music-start']", { timeout: 60_000 })
+  await waitText("so it uses all of it", 10_000)
 
   // 3. the idea
   await click("Continue")

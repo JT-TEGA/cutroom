@@ -236,6 +236,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/projects/{pid}/music": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Music
+         * @description The song for the Music step: waveform, BPM, drops and where the edit starts (auto, or the creator's pick).
+         *     Set the start with PATCH /projects/{id} {"brief": {"music_start": 42}} (null = auto).
+         */
+        get: operations["music_projects__pid__music_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/projects/{pid}/voiceover": {
         parameters: {
             query?: never;
@@ -387,6 +408,26 @@ export interface paths {
         };
         /** Output Video */
         get: operations["output_video_projects__pid__outputs__version__video_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/projects/{pid}/outputs/{version}/post": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Output Post
+         * @description The copy without the music, to post with the song added in Instagram/TikTok.
+         */
+        get: operations["output_post_projects__pid__outputs__version__post_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -548,6 +589,148 @@ export interface paths {
         get: operations["font_fonts__name__get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/photos/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Photos Status
+         * @description Whether the Photos library can be read. The first call starts reading it in the background ("loading");
+         *     poll until "ready". "no_access" comes with the System Settings steps in hint, and the app to give access to.
+         */
+        get: operations["photos_status_photos_status_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/photos/refresh": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Refresh
+         * @description Read the library again: after granting access ("Check again"), or to see new photos.
+         */
+        post: operations["refresh_photos_refresh_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/photos/open-settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Open Settings
+         * @description Open System Settings at the privacy pane Cutroom needs (the server runs on your Mac).
+         */
+        post: operations["open_settings_photos_open_settings_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/photos/albums": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Albums
+         * @description Your albums with how many photos and videos are in each, and an item to use as the cover.
+         */
+        get: operations["albums_photos_albums_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/photos/items": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Items
+         * @description Recent items (newest first) or an album's items (in its order), filtered by kind and date.
+         */
+        get: operations["items_photos_items_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/photos/thumbnail/{item_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Thumbnail
+         * @description A JPEG preview of a photo or video (from Photos' own previews, so iCloud-only items have one too).
+         */
+        get: operations["thumbnail_photos_thumbnail__item_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/projects/{pid}/photos/import": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Import Photos
+         * @description Export the originals of these items into the project (iCloud-only ones are downloaded through Photos; Live
+         *     Photos as stills unless live_video). Result: {"added": [file], "skipped": [{id, name, reason}]}.
+         */
+        post: operations["import_photos_projects__pid__photos_import_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -788,6 +971,17 @@ export interface components {
              * @description music file name or 'none'
              */
             track?: string | null;
+            /**
+             * Music Start
+             * @description seconds into the song where the edit starts; empty = auto (the strongest part / the drop)
+             */
+            music_start?: number | null;
+            /**
+             * Music In App
+             * @description I'll add this song in Instagram/TikTok when posting: the track is only used for the beat and the preview, and each render also exports <name>_post.mp4 without it
+             * @default false
+             */
+            music_in_app: boolean;
             /** Music Vibe */
             music_vibe?: string | null;
             /**
@@ -907,6 +1101,50 @@ export interface components {
             /** Detail */
             detail?: components["schemas"]["ValidationError"][];
         };
+        /**
+         * InAppSound
+         * @description Posting with the song added in Instagram/TikTok: what to pick there.
+         */
+        InAppSound: {
+            /**
+             * Song
+             * @description the uploaded track's file name
+             */
+            song: string;
+            /**
+             * Start
+             * @description where to start the song in the app (seconds, a whole second)
+             */
+            start: number;
+            /**
+             * Start Label
+             * @description the same as the app shows it, e.g. "0:42"
+             */
+            start_label: string;
+            /**
+             * Voice
+             * @description the post file has talking or a voiceover: turn the in-app song down under it
+             */
+            voice: boolean;
+            /** Song Duration */
+            song_duration?: number | null;
+            /**
+             * Warning
+             * @description e.g. the song ends before the video
+             */
+            warning?: string | null;
+        };
+        /** ItemPage */
+        ItemPage: {
+            /** Items */
+            items: components["schemas"]["PhotoItem"][];
+            /** Total */
+            total: number;
+            /** Offset */
+            offset: number;
+            /** Limit */
+            limit: number;
+        };
         /** Job */
         Job: {
             /** Id */
@@ -989,15 +1227,73 @@ export interface components {
             src: string;
             /**
              * Start
-             * @description seconds, "auto", "drop" or "drop-16"
+             * @description seconds into the song, "best" (the strongest part), "auto" (first downbeat), "drop" or "drop-16"
              */
             start?: number | string | null;
             /** Level Db */
             level_db?: number | null;
             /** Snap Cuts */
             snap_cuts?: boolean | null;
+            /**
+             * In App
+             * @description posted with the song added in Instagram/TikTok: the render also exports a copy without it, and the start is a whole second
+             */
+            in_app?: boolean | null;
         } & {
             [key: string]: unknown;
+        };
+        /** MusicInfo */
+        MusicInfo: {
+            /** File Id */
+            file_id: string;
+            /** Name */
+            name: string;
+            /**
+             * Path
+             * @description relative to the project folder
+             */
+            path: string;
+            /** Duration */
+            duration: number;
+            /** Bpm */
+            bpm: number;
+            /**
+             * Peaks
+             * @description the waveform, evenly spaced over the song (0..1)
+             */
+            peaks: number[];
+            /**
+             * Drops
+             * @description seconds into the song where the energy jumps
+             */
+            drops: number[];
+            /**
+             * Length
+             * @description the edit's target length, for the stretch of song it uses
+             */
+            length: number;
+            /**
+             * Auto Start
+             * @description where the edit starts when the creator hasn't picked a point
+             */
+            auto_start: number;
+            /**
+             * Auto Reason
+             * @enum {string}
+             */
+            auto_reason: "drop" | "loudest" | "first-downbeat" | "preset" | "preset-drop";
+            /** Auto Drop */
+            auto_drop?: number | null;
+            /**
+             * Start
+             * @description the creator's own start point (brief.music_start)
+             */
+            start?: number | null;
+            /**
+             * In App
+             * @description posting with the song added in Instagram/TikTok (brief.music_in_app)
+             */
+            in_app: boolean;
         };
         /** OutputVersion */
         OutputVersion: {
@@ -1011,6 +1307,15 @@ export interface components {
             video_url: string;
             /** Contact Sheet Url */
             contact_sheet_url: string | null;
+            /**
+             * Post Video
+             * @description the copy without the music (posting with the in-app sound)
+             */
+            post_video?: string | null;
+            /** Post Video Url */
+            post_video_url?: string | null;
+            /** @description the song and the start point to pick in Instagram/TikTok */
+            in_app?: components["schemas"]["InAppSound"] | null;
             /** Size Bytes */
             size_bytes: number;
             /** Duration */
@@ -1021,6 +1326,124 @@ export interface components {
             plan_version?: number | null;
             /** Created At */
             created_at?: unknown;
+        };
+        /** PhotoAlbum */
+        PhotoAlbum: {
+            /** Id */
+            id: string;
+            /** Title */
+            title: string;
+            /**
+             * Folder
+             * @description folders it sits in, e.g. "Shoots / 2026"
+             */
+            folder?: string | null;
+            /** Count */
+            count: number;
+            /** Photos */
+            photos: number;
+            /** Videos */
+            videos: number;
+            /**
+             * Cover
+             * @description item id to use as its cover thumbnail
+             */
+            cover?: string | null;
+            /** Start */
+            start?: string | null;
+            /** End */
+            end?: string | null;
+        };
+        /** PhotoItem */
+        PhotoItem: {
+            /**
+             * Id
+             * @description the Photos UUID
+             */
+            id: string;
+            /** Name */
+            name: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "photo" | "video";
+            /** Date */
+            date?: string | null;
+            /** Width */
+            width?: number | null;
+            /** Height */
+            height?: number | null;
+            /** Duration */
+            duration?: number | null;
+            /**
+             * Live
+             * @description a Live Photo: imported as the still unless the video part is asked for
+             * @default false
+             */
+            live: boolean;
+            /**
+             * Favorite
+             * @default false
+             */
+            favorite: boolean;
+            /**
+             * Local
+             * @description the original is on this Mac; false = in iCloud, downloaded on import
+             * @default true
+             */
+            local: boolean;
+        };
+        /** PhotosImport */
+        PhotosImport: {
+            /**
+             * Ids
+             * @description item ids (Photos UUIDs), in the order to add
+             */
+            ids: string[];
+            /**
+             * Live Video
+             * @description Live Photos: import the video part instead of the still
+             * @default false
+             */
+            live_video: boolean;
+        };
+        /** PhotosStatus */
+        PhotosStatus: {
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "idle" | "loading" | "ready" | "no_access" | "no_library" | "unavailable" | "error";
+            /**
+             * Message
+             * @default
+             */
+            message: string;
+            /** Hint */
+            hint?: string | null;
+            /**
+             * App
+             * @description the app Cutroom runs from: the one that needs Full Disk Access
+             */
+            app?: string | null;
+            /** Library */
+            library?: string | null;
+            /**
+             * Photos
+             * @default 0
+             */
+            photos: number;
+            /**
+             * Videos
+             * @default 0
+             */
+            videos: number;
+            /**
+             * Favorites
+             * @default 0
+             */
+            favorites: number;
         };
         /** Preset */
         Preset: {
@@ -1326,6 +1749,12 @@ export interface components {
                 [key: string]: unknown;
             };
             /**
+             * Post Video
+             * @description the copy without the music, to post with the in-app sound
+             */
+            post_video?: string | null;
+            in_app?: components["schemas"]["InAppSound"] | null;
+            /**
              * Created At
              * Format: date-time
              */
@@ -1569,6 +1998,15 @@ export interface components {
             font_files?: {
                 [key: string]: string;
             };
+        };
+        /** SettingsPane */
+        SettingsPane: {
+            /**
+             * Pane
+             * @default full_disk_access
+             * @enum {string}
+             */
+            pane: "full_disk_access" | "photos" | "automation";
         };
         /**
          * SettingsUpdate
@@ -2414,6 +2852,37 @@ export interface operations {
             };
         };
     };
+    music_projects__pid__music_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                pid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MusicInfo"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     voiceover_projects__pid__voiceover_get: {
         parameters: {
             query?: never;
@@ -2813,6 +3282,46 @@ export interface operations {
             };
         };
     };
+    output_post_projects__pid__outputs__version__post_get: {
+        parameters: {
+            query?: {
+                /** @description as an attachment (save as) */
+                download?: boolean;
+            };
+            header?: never;
+            path: {
+                pid: string;
+                version: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description partial content (Range request) */
+            206: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     output_contact_projects__pid__outputs__version__contact_get: {
         parameters: {
             query?: never;
@@ -3102,6 +3611,205 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    photos_status_photos_status_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PhotosStatus"];
+                };
+            };
+        };
+    };
+    refresh_photos_refresh_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PhotosStatus"];
+                };
+            };
+        };
+    };
+    open_settings_photos_open_settings_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["SettingsPane"] | null;
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    albums_photos_albums_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PhotoAlbum"][];
+                };
+            };
+        };
+    };
+    items_photos_items_get: {
+        parameters: {
+            query?: {
+                /** @description an album id; omit for everything, newest first */
+                album?: string | null;
+                kind?: "all" | "photo" | "video";
+                /** @description taken on or after this day */
+                since?: string | null;
+                /** @description taken on or before this day */
+                until?: string | null;
+                favorites?: boolean;
+                offset?: number;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ItemPage"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    thumbnail_photos_thumbnail__item_id__get: {
+        parameters: {
+            query?: {
+                w?: number;
+            };
+            header?: never;
+            path: {
+                item_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    import_photos_projects__pid__photos_import_post: {
+        parameters: {
+            query?: {
+                wait?: boolean;
+            };
+            header?: never;
+            path: {
+                pid: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PhotosImport"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Job"];
+                };
             };
             /** @description Validation Error */
             422: {

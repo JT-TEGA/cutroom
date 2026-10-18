@@ -103,7 +103,7 @@ def responsible_app(pid: int | None = None) -> str | None:
             return None
         ppid, _, comm = out.partition(" ")
         m = re.match(r"^(.*?)/([^/]+)\.app/", comm.strip())
-        if m:
+        if m and ".framework/" not in comm:     # Python itself lives in Python.framework/.../Python.app: not it
             return m.group(2)
         if not ppid.strip().isdigit() or int(ppid) <= 1:
             return None

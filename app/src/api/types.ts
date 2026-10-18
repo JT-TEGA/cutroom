@@ -22,9 +22,15 @@ export type BrandSettings = S["BrandSettings"]
 export type AppSettings = S["AppSettings"]
 export type SystemStatus = S["SystemStatus"]
 export type VoiceoverInfo = S["VoiceoverInfo"]
+export type MusicInfo = S["MusicInfo"]
+export type InAppSound = S["InAppSound"]
+export type PhotosStatus = S["PhotosStatus"]
+export type PhotoItem = S["PhotoItem"]
+export type PhotoAlbum = S["PhotoAlbum"]
+export type PhotoPage = S["ItemPage"]
 
 export type ProjectStatus = Project["status"]
-export type JobKind = "analyse" | "plan" | "render" | "revise" | "reference"
+export type JobKind = "analyse" | "plan" | "render" | "revise" | "reference" | "photos-import"
 
 /** A job event from WS /ws/jobs/{id}. */
 export type JobEvent =

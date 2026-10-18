@@ -21,6 +21,7 @@ const BRAIN_SUB: Record<JobKind, string> = {
   revise: "Changing only what your notes ask for and keeping everything else as it was.",
   render: "",
   reference: "Reading the reel's hook, pacing, text and grade.",
+  "photos-import": "",
 }
 
 function useElapsed(since: string | null | undefined, running: boolean) {
@@ -117,6 +118,7 @@ function JobScreen({ jobId }: { jobId: string }) {
         const r = jobs.find((j) => j.kind === "render" && ["queued", "running"].includes(j.status))
         if (r) return navigate(`${base}/jobs/${r.id}`, { replace: true })
       }
+      if (job.kind === "photos-import") return navigate(`${base}/setup/media`, { replace: true })
       if (job.kind === "render") {
         const v = (job.result as { version?: number } | null)?.version
         return navigate(`${base}/video${v ? `?v=${v}` : ""}`, { replace: true })

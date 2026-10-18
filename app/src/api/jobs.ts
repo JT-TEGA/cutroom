@@ -13,6 +13,7 @@ export const JOB_COPY: Record<JobKind, { title: string; brain: string; done: str
   render: { title: "Rendering", brain: "", done: "Render finished" },
   revise: { title: "Applying your notes", brain: "Claude is revising the plan…", done: "Plan updated" },
   reference: { title: "Studying the reference reel", brain: "Claude is studying the reel…", done: "Style spec ready" },
+  "photos-import": { title: "Importing from Photos", brain: "", done: "Imported from Photos" },
 }
 
 export const isBrainStep = (step: string | null | undefined) => !!step && /^(brain|ask the brain)/i.test(step)
@@ -46,6 +47,10 @@ export const JOB_STAGES: Record<JobKind, Stage[]> = {
     { id: "audio", label: "Mix the sound", match: /^audio/ },
     { id: "export", label: "Export", match: /^export/ },
     { id: "contact", label: "Contact sheet", match: /^contact sheet|^done/ },
+  ],
+  "photos-import": [
+    { id: "import", label: "Copy the originals from Photos", match: /^import/ },
+    { id: "done", label: "Add them to the edit", match: /^done/ },
   ],
   reference: [
     { id: "download", label: "Download the reel", match: /download/ },

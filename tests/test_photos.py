@@ -223,6 +223,10 @@ def test_responsible_app_walks_up_to_the_app_bundle(monkeypatch: pytest.MonkeyPa
     assert P.responsible_app(100) == "Terminal"
     tree[98] = "1 /usr/sbin/sshd"
     assert P.responsible_app(100) is None
+    # the framework Python is inside a Python.app: skipped, the terminal above it counts
+    tree[100] = "99 /Library/Frameworks/Python.framework/Versions/3.10/Resources/Python.app/Contents/MacOS/Python"
+    tree[98] = "1 /Applications/iTerm.app/Contents/MacOS/iTerm2"
+    assert P.responsible_app(100) == "iTerm"
 
 
 # ---------------------------------------------------------------- thumbnails and export

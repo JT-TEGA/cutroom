@@ -300,7 +300,9 @@ export function Track({
               </span>
             ))}
             <span className="absolute top-1/2 left-2 flex -translate-y-1/2 items-center gap-1 rounded bg-[#141418]/90 px-1.5 py-px text-[11px] font-medium text-amber-100">
-              <Music2 className="size-3" /> {basename(String(view.music.src))} · {Math.round(Number(view.music.bpm))} BPM
+              <Music2 className="size-3" /> {basename(String(view.music.src))} · {Math.round(Number(view.music.bpm))} BPM · from{" "}
+              {clock(Number(view.music.starts_at ?? 0))}
+              {view.music.in_app ? " · you add it in the app" : ""}
             </span>
           </div>
         )}

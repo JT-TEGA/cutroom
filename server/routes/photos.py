@@ -2,13 +2,16 @@
 importing originals into a project as a background job."""
 from __future__ import annotations
 
+import subprocess
+import sys
 from datetime import date, datetime, time
 from typing import Any, Literal
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, status
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel, Field
 
+from engine.config import EngineError
 from engine.photos import ItemPage, PhotoAlbum, PhotosStatus, import_items
 
 from ..deps import Services, services
@@ -24,7 +27,7 @@ class PhotosImport(BaseModel):
 
 
 @router.get("/photos/status", response_model=PhotosStatus)
-def status(svc: Services = Depends(services)) -> PhotosStatus:
+def photos_status(svc: Services = Depends(services)) -> PhotosStatus:
     """Whether the Photos library can be read. The first call starts reading it in the background ("loading");
     poll until "ready". "no_access" comes with the System Settings steps in hint, and the app to give access to."""
     return svc.photos.status()
@@ -34,6 +37,22 @@ def status(svc: Services = Depends(services)) -> PhotosStatus:
 def refresh(svc: Services = Depends(services)) -> PhotosStatus:
     """Read the library again: after granting access ("Check again"), or to see new photos."""
     return svc.photos.refresh()
+
+
+class SettingsPane(BaseModel):
+    pane: Literal["full_disk_access", "photos", "automation"] = "full_disk_access"
+
+
+PANES = {"full_disk_access": "Privacy_AllFiles", "photos": "Privacy_Photos", "automation": "Privacy_Automation"}
+
+
+@router.post("/photos/open-settings", status_code=status.HTTP_204_NO_CONTENT)
+def open_settings(body: SettingsPane | None = None) -> None:
+    """Open System Settings at the privacy pane Cutroom needs (the server runs on your Mac)."""
+    if sys.platform != "darwin":
+        raise EngineError("System Settings is on a Mac", code="not_macos", status=501)
+    url = f"x-apple.systempreferences:com.apple.preference.security?{PANES[(body or SettingsPane()).pane]}"
+    subprocess.run(["open", url], check=False, capture_output=True, timeout=10)
 
 
 @router.get("/photos/albums", response_model=list[PhotoAlbum])

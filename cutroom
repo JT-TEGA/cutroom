@@ -46,7 +46,9 @@ if [ "$DEMO" = 1 ]; then
   [ -f "$D/brand.md" ] || cp "$ROOT/brand.md" "$D/brand.md"
   [ -d "$D/presets" ] || cp -R "$ROOT/presets" "$D/presets"
   export CUTROOM_BRAIN=demo CUTROOM_WORKSPACE="$D/workspace" CUTROOM_BRAND="$D/brand.md" CUTROOM_PRESETS="$D/presets"
-  say "Demo mode: scripted brain, separate workspace in .demo/ (your projects and brand.md are untouched)"
+  # Import from Photos reads a stand-in library made from .demo/media (CUTROOM_PHOTOS=denied shows the no-access screen)
+  export CUTROOM_PHOTOS="${CUTROOM_PHOTOS:-demo}" CUTROOM_PHOTOS_DIR="${CUTROOM_PHOTOS_DIR:-$D/media}"
+  say "Demo mode: scripted brain, separate workspace in .demo/ (your projects, brand.md and Photos library are untouched)"
 fi
 
 pids=()

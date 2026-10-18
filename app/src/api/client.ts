@@ -93,6 +93,11 @@ export const mediaUrl = (path: string) => `${API}/media/file?path=${q(path)}`
 export const fileContentUrl = (pid: string, fileId: string) => `${API}/projects/${q(pid)}/files/${q(fileId)}/content`
 export const videoUrl = (pid: string, version: number, download = false) =>
   `${API}/projects/${q(pid)}/outputs/${version}/video${download ? "?download=true" : ""}`
+/** The copy without the music (posting with the song added in Instagram/TikTok). */
+export const postVideoUrl = (pid: string, version: number, download = false) =>
+  `${API}/projects/${q(pid)}/outputs/${version}/post${download ? "?download=true" : ""}`
+/** A preview of an item in the Mac Photos library. */
+export const photoThumbUrl = (id: string, w = 320) => `${API}/photos/thumbnail/${q(id)}?w=${w}`
 export const contactUrl = (pid: string, version: number) => `${API}/projects/${q(pid)}/outputs/${version}/contact`
 export const fontUrl = (file: string) => `${API}/fonts/${q(file)}`
 export const jobSocketUrl = (jobId: string) =>

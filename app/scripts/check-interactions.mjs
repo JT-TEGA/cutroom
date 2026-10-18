@@ -1,9 +1,17 @@
 // Smoke test of the editing interactions, checked against the API: reorder clips in the wizard, reorder segments,
-// swap a clip in from the media bin, delete a shot and undo, edit a label. Run against a demo workspace that has
+// swap a clip in from the media bin, delete a shot and undo, edit a label, and drop files the way the Photos app hands
+// them to the browser (a JPEG without an extension, a HEIC with no type, a MOV), plus a drop with nothing in it. Run against a demo workspace that has
 // the walkthrough's projects (node app/scripts/walkthrough.mjs first).
 //
 //   CUTROOM_URL=http://localhost:5173 node app/scripts/check-interactions.mjs
+import { execFileSync } from "node:child_process"
+import { mkdtempSync, readFileSync } from "node:fs"
+import { tmpdir } from "node:os"
+import path from "node:path"
+import { fileURLToPath } from "node:url"
 import { BASE, hop, launch, sleep, watchErrors } from "./browser.mjs"
+
+const repo = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..")
 
 const api = async (p) => (await fetch(`${BASE}/api${p}`)).json()
 let failures = 0
@@ -98,6 +106,50 @@ if (tl.text?.length) {
   await page.keyboard.type("Squats 5x5")
   await page.keyboard.press("Enter")
   check(await until(async () => (await api(`/projects/${legs.id}/timeline`)).timeline.text[0].text === "Squats 5x5"), "editing a label saves it")
+  await hop(page)
+}
+
+// 6. drop items like a drag out of the Photos app: odd names and types must still come in
+{
+  const dir = mkdtempSync(path.join(tmpdir(), "cutroom-drop-"))
+  const heic = path.join(dir, "IMG_0043.HEIC")
+  const mov = path.join(dir, "IMG_0044.MOV")
+  execFileSync("sips", ["-s", "format", "heic", path.join(repo, ".demo/media/night/IMG_0802.jpg"), "--out", heic], { stdio: "ignore" })
+  execFileSync("ffmpeg", ["-hide_banner", "-loglevel", "error", "-y", "-f", "lavfi", "-i", "testsrc2=size=360x640:rate=30", "-t", "1",
+    "-c:v", "libx264", "-pix_fmt", "yuv420p", mov])
+  const b64 = (f) => readFileSync(f).toString("base64")
+  const files = [
+    { name: "IMG_0042", type: "image/jpeg", b64: b64(path.join(repo, ".demo/media/night/IMG_0801.jpg")) },
+    { name: "IMG_0043.HEIC", type: "", b64: b64(heic) },
+    { name: "IMG_0044.MOV", type: "video/quicktime", b64: b64(mov) },
+  ]
+  const target = find("Leg day routine")
+  const names = async () => (await api(`/projects/${target.id}/files`)).map((f) => f.name)
+  const n0 = (await names()).length
+  await page.goto(`${BASE}/projects/${target.id}/setup/media`, { waitUntil: "networkidle0" })
+  const drop = (list) =>
+    page.evaluate((list) => {
+      const dt = new DataTransfer()
+      for (const f of list) dt.items.add(new File([Uint8Array.from(atob(f.b64), (c) => c.charCodeAt(0))], f.name, { type: f.type }))
+      const zone = document.querySelector("[data-testid='drop-clip']")
+      for (const t of ["dragenter", "dragover", "drop"]) zone.dispatchEvent(new DragEvent(t, { dataTransfer: dt, bubbles: true, cancelable: true }))
+    }, list)
+  await drop(files)
+  check(
+    await until(async () => {
+      const n = await names()
+      return n.length === n0 + 3 && n.includes("IMG_0042.jpg") && n.includes("IMG_0043.HEIC") && n.includes("IMG_0044.MOV")
+    }, 30_000),
+    "a Photos-style drop (no extension, HEIC with no type, MOV) adds all three files",
+  )
+  await drop([])
+  check(
+    await until(async () => page.evaluate(() => document.body.innerText.includes("Nothing came through from that drag"))),
+    "an empty drop says what to do instead",
+  )
+  // put the project back as it was
+  for (const f of (await api(`/projects/${target.id}/files`)).filter((f) => /^IMG_004[234]/.test(f.name)))
+    await fetch(`${BASE}/api/projects/${target.id}/files/${f.id}`, { method: "DELETE" })
   await hop(page)
 }
 

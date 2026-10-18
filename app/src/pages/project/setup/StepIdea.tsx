@@ -1,9 +1,10 @@
 import { AnimatePresence, motion } from "framer-motion"
-import { Check, ChevronDown, Cloud, Layers, Link2, Loader2, Mic, MicOff, Type, User, Wand2 } from "lucide-react"
+import { Check, ChevronDown, Cloud, Layers, Link2, Loader2, Mic, MicOff, Smartphone, Type, User, Wand2 } from "lucide-react"
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react"
 import { usePatchProject, usePresets } from "@/api/queries"
 import type { Brief, Project } from "@/api/types"
 import { Input } from "@/components/ui/input"
+import { Switch } from "@/components/ui/switch"
 import { Textarea } from "@/components/ui/textarea"
 import { presetDefaults, presetMeta } from "@/lib/presets"
 import { cn } from "@/lib/utils"
@@ -238,7 +239,7 @@ export function StepIdea({ project }: { project: Project }) {
         <Section
           title="Sound, look & pacing"
           icon={Wand2}
-          filled={count(["voiceover_file", "visual_cues", "colour_grade", "beat_sync", "music_vibe", "sound_effects", "pacing", "end_card"])}
+          filled={count(["voiceover_file", "visual_cues", "colour_grade", "beat_sync", "music_vibe", "sound_effects", "music_in_app", "pacing", "end_card"])}
         >
           {voices.length > 0 && (
             <Field label="Voiceover file">
@@ -268,6 +269,16 @@ export function StepIdea({ project }: { project: Project }) {
               <Input {...text("sound_effects", true)} placeholder="whooshes, bass hits on cuts…" className={inputCls} />
             </Field>
           </div>
+          <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-white/[0.07] px-4 py-3 transition hover:border-white/15">
+            <Smartphone className="mt-0.5 size-4 shrink-0 text-primary" />
+            <span className="min-w-0 flex-1">
+              <span className="block text-[13px] font-medium">I'll add this song in Instagram/TikTok when posting</span>
+              <span className="block text-[12px] text-muted-foreground">
+                The uploaded track only sets the beat and the preview; you get a copy without it and the second to start the song at.
+              </span>
+            </span>
+            <Switch checked={!!b.music_in_app} onCheckedChange={(v) => set("music_in_app", v)} aria-label="Post with the in-app sound" />
+          </label>
           <Field label="Pacing & effects">
             <Textarea {...text("pacing")} rows={2} placeholder={defaults.pacing ?? "fast cuts, zoom-ins on punchlines, slow-mo on fabric"} className={inputCls} />
           </Field>

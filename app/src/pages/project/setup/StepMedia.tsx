@@ -13,7 +13,7 @@ import { arrayMove, rectSortingStrategy, SortableContext, sortableKeyboardCoordi
 import { CSS } from "@dnd-kit/utilities"
 import { useQueryClient } from "@tanstack/react-query"
 import { AnimatePresence, motion } from "framer-motion"
-import { Clapperboard, GripVertical, ImageIcon, Mic, Music2, Pause, Play, Upload, X } from "lucide-react"
+import { Clapperboard, GripVertical, ImageIcon, Images, Mic, Music2, Pause, Play, Upload, X } from "lucide-react"
 import { type ReactNode, useRef, useState } from "react"
 import { toast } from "sonner"
 import { fileContentUrl } from "@/api/client"
@@ -22,8 +22,47 @@ import type { Project, ProjectFile } from "@/api/types"
 import { Thumb } from "@/components/Thumb"
 import { clock, pluralize } from "@/lib/format"
 import { cn } from "@/lib/utils"
+import { MusicPanel } from "./MusicPanel"
+import { PhotosPicker } from "./PhotosPicker"
 
 type Kind = "clip" | "voiceover" | "music"
+
+/** Extensions for files that arrive without one (drags from some apps, e.g. Photos, can name a file "IMG_0042"). */
+const EXT_FOR_TYPE: Record<string, string> = {
+  "image/jpeg": ".jpg",
+  "image/png": ".png",
+  "image/heic": ".heic",
+  "image/heif": ".heif",
+  "image/webp": ".webp",
+  "image/tiff": ".tiff",
+  "video/quicktime": ".mov",
+  "video/mp4": ".mp4",
+  "video/x-m4v": ".m4v",
+  "audio/mpeg": ".mp3",
+  "audio/mp4": ".m4a",
+  "audio/x-m4a": ".m4a",
+  "audio/wav": ".wav",
+  "audio/x-wav": ".wav",
+  "audio/aac": ".aac",
+}
+
+function withExtension(f: File): File {
+  if (/\.[a-z0-9]{2,5}$/i.test(f.name)) return f
+  const ext = EXT_FOR_TYPE[f.type]
+  return ext ? new File([f], `${f.name || "item"}${ext}`, { type: f.type, lastModified: f.lastModified }) : f
+}
+
+/** The files in a drop: dataTransfer.files, or the file items when an app only fills those in. */
+export function droppedFiles(dt: DataTransfer | null): File[] {
+  if (!dt) return []
+  let files = Array.from(dt.files ?? [])
+  if (!files.length)
+    files = Array.from(dt.items ?? [])
+      .filter((i) => i.kind === "file")
+      .map((i) => i.getAsFile())
+      .filter((f): f is File => !!f)
+  return files.map(withExtension)
+}
 
 const ZONES: Record<Kind, { title: string; sub: string; accept: string; icon: typeof Upload }> = {
   clip: {
@@ -41,12 +80,14 @@ function DropZone({
   onFiles,
   progress,
   big,
+  action,
   children,
 }: {
   kind: Kind
   onFiles: (files: File[]) => void
   progress: number | null
   big?: boolean
+  action?: ReactNode
   children?: ReactNode
 }) {
   const z = ZONES[kind]
@@ -55,6 +96,7 @@ function DropZone({
   const depth = useRef(0)
   return (
     <div
+      data-testid={`drop-${kind}`}
       onDragEnter={(e) => {
         e.preventDefault()
         depth.current += 1
@@ -69,18 +111,26 @@ function DropZone({
         e.preventDefault()
         depth.current = 0
         setOver(false)
-        const files = Array.from(e.dataTransfer.files)
+        const files = droppedFiles(e.dataTransfer)
         if (files.length) onFiles(files)
+        else
+          toast.error("Nothing came through from that drag", {
+            description:
+              kind === "clip"
+                ? "Some apps don't hand their files to the browser. Use Import from Photos, or drag the items to your Desktop first and drop them from there."
+                : "Drag the file from Finder, or click Browse.",
+          })
       }}
       className={cn(
         "relative flex flex-col overflow-hidden rounded-2xl border border-dashed transition-all",
         over ? "border-primary bg-primary/[0.08] shadow-[0_0_0_4px_rgb(124_92_255/0.12)]" : "border-white/[0.1] bg-white/[0.015]",
       )}
     >
+      <div className="flex items-center">
       <button
         type="button"
         onClick={() => input.current?.click()}
-        className={cn("group flex items-center gap-4 text-left", big ? "px-6 py-6" : "px-5 py-5")}
+        className={cn("group flex min-w-0 flex-1 items-center gap-4 text-left", big ? "px-6 py-6" : "px-5 py-5")}
       >
         <span
           className={cn(
@@ -98,6 +148,8 @@ function DropZone({
           <Upload className="size-3.5" /> Browse
         </span>
       </button>
+      {action && <div className={cn("shrink-0", big ? "pr-6" : "pr-5")}>{action}</div>}
+      </div>
       <input
         ref={input}
         type="file"
@@ -268,6 +320,7 @@ export function StepMedia({ project }: { project: Project }) {
   const del = useDeleteFile(pid)
   const [progress, setProgress] = useState<Record<Kind, number | null>>({ clip: null, voiceover: null, music: null })
   const [dragging, setDragging] = useState<string | null>(null)
+  const [photos, setPhotos] = useState(false)
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
@@ -276,6 +329,8 @@ export function StepMedia({ project }: { project: Project }) {
   const files = project.files ?? []
   const ordered = files.filter((f) => f.kind !== "music")
   const music = files.filter((f) => f.kind === "music")
+  const named = (project.brief?.track ?? "").trim().toLowerCase()
+  const song = music.find((f) => named && f.name.toLowerCase() === named) ?? music[music.length - 1]
   const visual = ordered.filter((f) => f.kind !== "voiceover")
   const mixed = (project.brief?.talking ?? "").startsWith("mixed")
 
@@ -315,7 +370,22 @@ export function StepMedia({ project }: { project: Project }) {
   return (
     <div className="grid grid-cols-[1fr_340px] gap-6 max-lg:grid-cols-1">
       <div className="flex min-w-0 flex-col gap-5">
-        <DropZone kind="clip" big onFiles={(l) => send("clip", l)} progress={progress.clip} />
+        <DropZone
+          kind="clip"
+          big
+          onFiles={(l) => send("clip", l)}
+          progress={progress.clip}
+          action={
+            <button
+              type="button"
+              onClick={() => setPhotos(true)}
+              className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-primary/30 bg-primary/10 px-3 text-[12.5px] font-medium text-violet-100 transition hover:bg-primary/20"
+            >
+              <Images className="size-3.5" /> Import from Photos
+            </button>
+          }
+        />
+        <PhotosPicker pid={pid} open={photos} onOpenChange={setPhotos} />
 
         <div className="panel min-h-[300px] p-5">
           <div className="mb-4 flex items-center justify-between gap-4">
@@ -350,6 +420,7 @@ export function StepMedia({ project }: { project: Project }) {
             </DndContext>
           )}
         </div>
+        {song && <MusicPanel key={song.id} project={project} file={song} />}
       </div>
 
       <div className="flex flex-col gap-5">
@@ -367,6 +438,12 @@ export function StepMedia({ project }: { project: Project }) {
           {music.map((f) => (
             <MusicRow key={f.id} file={f} pid={pid} onDelete={() => del.mutate(f.id)} />
           ))}
+          {!music.length && (
+            <div className="border-t border-white/[0.05] px-5 py-3 text-[12.5px] leading-relaxed text-muted-foreground">
+              Adding the song in Instagram or TikTok when you post? Upload the same song here anyway: it sets the beat and
+              the preview, and you'll get a copy without it.
+            </div>
+          )}
         </DropZone>
         <div className="rounded-2xl border border-white/[0.05] bg-white/[0.015] p-5 text-[12.5px] leading-relaxed text-muted-foreground">
           <div className="mb-1.5 font-medium text-zinc-300">Good to know</div>
@@ -374,6 +451,7 @@ export function StepMedia({ project }: { project: Project }) {
             <li>Phone footage is fine: it's framed to 9:16 around faces automatically.</li>
             <li>Slow-mo and speed ramps look smooth only on 60 fps clips.</li>
             <li>No music? Beat-cut types will ask for a track before planning.</li>
+            <li>You can drag photos and videos straight out of the Photos app, or use Import from Photos.</li>
           </ul>
         </div>
       </div>
