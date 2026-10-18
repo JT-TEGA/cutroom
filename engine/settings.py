@@ -77,7 +77,8 @@ class AppSettings(BaseModel):
     brain_backend: Literal["claude-code", "anthropic-api"] = Field(
         "claude-code", description="claude-code runs your logged-in Claude Code (no API key); anthropic-api needs "
                                    "ANTHROPIC_API_KEY in .env")
-    brain_model: str | None = Field(None, description="Claude Code model alias (sonnet, opus...); empty = CLI default")
+    brain_model: str | None = Field("sonnet", description="Claude Code model alias passed as --model (sonnet, "
+                                                       "opus...); empty = the CLI's default")
     brain_effort: Literal["low", "medium", "high", "xhigh", "max"] | None = None
     brain_timeout_s: int = Field(300, ge=30, le=1800)
     brain_max_turns: int = Field(6, ge=1, le=30)

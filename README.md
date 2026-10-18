@@ -60,9 +60,10 @@ brain.reference.style_spec(...)   # -> a reference reel's style, as settings
 brain.revise.revise(...)          # -> the plan with your notes applied
 ```
 
-`ClaudeCodeBrain` calls the `claude` CLI in print mode, in the project folder, prompt on stdin. Each call is isolated:
-no user/project settings, hooks, plugins, MCP servers or `CLAUDE.md`; nothing saved; a low turn limit; and the only
-tool, `Read`, is allowed for the project's `work/` folder (contact sheets) and denied for raw media. Any
+`ClaudeCodeBrain` calls the `claude` CLI in print mode, in the project folder, prompt on stdin, with `--model sonnet`
+to go easier on your subscription usage (`brain_model` in the app settings; empty = the CLI's default). Each call
+is isolated: no user/project settings, hooks, plugins, MCP servers or `CLAUDE.md`; nothing saved; a low turn limit;
+and the only tool, `Read`, is allowed for the project's `work/` folder (contact sheets) and denied for raw media. Any
 `ANTHROPIC_API_KEY` is stripped from its environment so calls stay on your Claude subscription. Replies are parsed,
 validated (schema + "do these files exist, is this phrase actually said"), retried once with the errors, and logged
 with their duration to the project's `work/jobs.log`. Failures come back as clear API errors: *Claude Code not

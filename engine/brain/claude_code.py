@@ -106,8 +106,8 @@ def _main_model(d: dict[str, Any]) -> str | None:
 class ClaudeCodeBrain(Brain):
     name = "claude-code"
 
-    def __init__(self, model: str | None = None, effort: str | None = None, binary: str | None = None):
-        self.model = model or None
+    def __init__(self, model: str | None = "sonnet", effort: str | None = None, binary: str | None = None):
+        self.model = model or None          # None / "": no --model, the CLI picks
         self.effort = effort or None
         self.binary = binary
 

@@ -108,8 +108,19 @@ def test_cli_success_and_isolation_flags(tmp_path, fake_claude, monkeypatch) -> 
     assert "Read(./inputs/**)" in args[args.index("--disallowedTools") + 1]
     assert args[args.index("--permission-mode") + 1] == "dontAsk"
     assert args[args.index("--setting-sources") + 1] == ""
+    assert args[args.index("--model") + 1] == "sonnet"
     assert (tmp_path / "stdin.txt").read_text() == "do it"            # prompt via stdin
     assert (tmp_path / "apikey.txt").read_text().strip() == "unset"   # stays on the subscription
+
+
+def test_cli_model_defaults_to_sonnet_and_follows_settings(tmp_path) -> None:
+    from engine import settings as S
+    from engine.brain import get_brain
+    assert get_brain().model == "sonnet"
+    S.save(S.SettingsUpdate(app={"brain_model": "opus"}))
+    assert get_brain().command(req(tmp_path), "claude")[-2:] == ["--model", "opus"]
+    S.save(S.SettingsUpdate(app={"brain_model": None}))          # empty: leave the model to the CLI
+    assert "--model" not in get_brain().command(req(tmp_path), "claude")
 
 
 def test_cli_without_images_has_no_tools(tmp_path, fake_claude, monkeypatch) -> None:
