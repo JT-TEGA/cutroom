@@ -102,8 +102,8 @@ def status(include_claude: bool = True) -> SystemStatus:
                                        if claude.get("logged_in") else "not logged in")).strip(),
                             hint=claude.get("hint")))
     brain = get_brain(app)
-    brain_info = {"backend": app.brain_backend, "model": app.brain_model or app.anthropic_model
-                  if app.brain_backend == "anthropic-api" else app.brain_model or "CLI default"}
+    brain_info = {"backend": app.brain_backend, "model": app.anthropic_model
+                  if app.brain_backend == "anthropic-api" else (app.brain_model or "CLI default")}
     if app.brain_backend == "anthropic-api":
         brain_info.update(brain.status())
     else:

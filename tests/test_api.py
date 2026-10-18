@@ -202,6 +202,43 @@ def test_background_job_and_websocket_progress(client: TestClient, media) -> Non
         assert ws.receive_json()["error"]["code"] == "job_not_found"
 
 
+def test_jobs_survive_a_restart_and_interrupted_ones_can_be_retried(client: TestClient, media, cutroom_paths) -> None:
+    pid = new_project(client)
+    upload(client, pid, media["clip_a"])
+    done = client.post(f"/projects/{pid}/analyse", params={"wait": "true"}).json()
+    f = cutroom_paths.workspace / pid / "work" / "jobs.json"
+    saved = json.loads(f.read_text())
+    assert [(j["id"], j["status"]) for j in saved] == [(done["id"], "done")]
+    assert any("brain: brief.analyse" in line for line in saved[0]["log"])
+    base = {**saved[0], "result": None, "finished_at": None, "log": []}
+    saved += [{**base, "id": "aaaaaaaaaaaa", "kind": "render", "queue": "render", "status": "running",   # was busy
+               "params": {"draft": True}},
+              {**base, "id": "bbbbbbbbbbbb", "status": "queued", "started_at": None}]                  # was waiting
+    f.write_text(json.dumps(saved))
+    client.post("/projects", json={"name": "Elsewhere"})
+
+    svc = Services(store=ProjectStore(cutroom_paths.workspace), jobs=JobManager(), brain_factory=lambda: client.brain)
+    with TestClient(create_app(svc)) as c:                      # the server starts again
+        jobs = {j["id"]: j for j in c.get("/jobs", params={"project_id": pid}).json()}
+        assert jobs[done["id"]]["status"] == "done" and jobs[done["id"]]["result"]["questions"]
+        render, queued = jobs["aaaaaaaaaaaa"], jobs["bbbbbbbbbbbb"]
+        assert render["status"] == queued["status"] == "interrupted" and render["finished_at"]
+        assert "while this job was running" in render["error"]["message"] and render["params"] == {"draft": True}
+        assert "before this job started" in queued["error"]["message"]
+        p = c.get(f"/projects/{pid}").json()
+        assert p["status"] == "error" and p["last_error"]["code"] == "interrupted"
+        assert {j["id"]: j["status"] for j in json.loads(f.read_text())}["aaaaaaaaaaaa"] == "interrupted"
+
+        r = c.post(f"/jobs/{done['id']}/retry")
+        assert r.status_code == 409 and r.json()["error"]["code"] == "job_not_retryable"
+        r = c.post("/jobs/bbbbbbbbbbbb/retry")
+        assert r.status_code == 202 and r.json()["retry_of"] == "bbbbbbbbbbbb" and r.json()["kind"] == "analyse"
+        assert svc.jobs.get(r.json()["id"]).status in ("queued", "running", "done")
+        import asyncio
+        again = asyncio.run(svc.jobs.wait(r.json()["id"]))
+        assert again.status == "done" and c.get(f"/projects/{pid}").json()["status"] == "analysed"
+
+
 def test_render_and_plan_need_their_inputs(client: TestClient) -> None:
     pid = new_project(client)
     r = client.post(f"/projects/{pid}/render")

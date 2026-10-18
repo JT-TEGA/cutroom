@@ -142,25 +142,69 @@ def _on_error(svc: Services, pid: str):
     return lambda e: pipeline.failed(svc.store, pid, e)
 
 
+# Each editing job is started here, from its endpoint or from POST /jobs/{id}/retry with the saved params.
+
+def start_analyse(svc: Services, pid: str, params: dict[str, Any], retry_of: str | None = None) -> Job:
+    _guard(svc, pid, ("analyse", "plan", "revise"))
+    return svc.jobs.submit("analyse", lambda: pipeline.analyse(svc.store, pid, svc.brain_factory()),
+                           project_id=pid, on_error=_on_error(svc, pid), params=params, retry_of=retry_of)
+
+
+def start_plan(svc: Services, pid: str, params: dict[str, Any], retry_of: str | None = None) -> Job:
+    _guard(svc, pid, ("plan", "revise", "render"))
+    return svc.jobs.submit("plan", lambda: pipeline.plan(svc.store, pid, svc.brain_factory()),
+                           project_id=pid, on_error=_on_error(svc, pid), params=params, retry_of=retry_of)
+
+
+def start_render(svc: Services, pid: str, params: dict[str, Any], retry_of: str | None = None) -> Job:
+    from engine.common import need
+    need("ffmpeg")
+    need("node")
+    _guard(svc, pid, ("plan", "revise", "render"))
+    if not (svc.store.dir(pid) / "work" / "edl.json").exists():
+        raise EngineError("this project has no plan yet: run plan first", code="no_plan", status=409)
+    draft = bool(params.get("draft"))
+    return svc.jobs.submit("render", lambda: pipeline.render(svc.store, pid, draft), project_id=pid,
+                           queue="render", on_error=_on_error(svc, pid), params=params, retry_of=retry_of)
+
+
+def start_revise(svc: Services, pid: str, params: dict[str, Any], retry_of: str | None = None) -> Job:
+    _guard(svc, pid, ("plan", "revise", "render"))
+
+    def then_render(_: Any) -> None:
+        if params.get("render"):
+            svc.jobs.submit("render", lambda: pipeline.render(svc.store, pid), project_id=pid, queue="render",
+                            on_error=_on_error(svc, pid), params={"draft": False})
+
+    return svc.jobs.submit("revise", lambda: pipeline.revise(svc.store, pid, params["notes"], svc.brain_factory()),
+                           project_id=pid, on_error=_on_error(svc, pid), on_done=then_render, params=params,
+                           retry_of=retry_of)
+
+
+def start_reference(svc: Services, pid: str, params: dict[str, Any], retry_of: str | None = None) -> Job:
+    _guard(svc, pid, ("reference", "plan"))
+    return svc.jobs.submit("reference", lambda: pipeline.reference(svc.store, pid, svc.brain_factory(),
+                                                                   params.get("url"),
+                                                                   params.get("cookies_from_browser")),
+                           project_id=pid, on_error=_on_error(svc, pid), params=params, retry_of=retry_of)
+
+
+STARTERS = {"analyse": start_analyse, "plan": start_plan, "render": start_render, "revise": start_revise,
+            "reference": start_reference}
+
 WAIT = Query(False, description="block until the job finishes and return it (otherwise 202 + job to poll)")
 
 
 @router.post("/projects/{pid}/analyse", response_model=Job, status_code=202, tags=["editing"])
 async def analyse(pid: str, wait: bool = WAIT, svc: Services = Depends(services)) -> Any:
     """Check the brief; the result is a list of clarifying questions (empty when it's ready to plan)."""
-    _guard(svc, pid, ("analyse", "plan", "revise"))
-    job = svc.jobs.submit("analyse", lambda: pipeline.analyse(svc.store, pid, svc.brain_factory()), project_id=pid,
-                          on_error=_on_error(svc, pid))
-    return await _respond(svc, job, wait)
+    return await _respond(svc, start_analyse(svc, pid, {}), wait)
 
 
 @router.post("/projects/{pid}/plan", response_model=Job, status_code=202, tags=["editing"])
 async def plan(pid: str, wait: bool = WAIT, svc: Services = Depends(services)) -> Any:
     """Transcribe, clean the voiceover, draft and let the brain build the edit plan. Result: the timeline."""
-    _guard(svc, pid, ("plan", "revise", "render"))
-    job = svc.jobs.submit("plan", lambda: pipeline.plan(svc.store, pid, svc.brain_factory()), project_id=pid,
-                          on_error=_on_error(svc, pid))
-    return await _respond(svc, job, wait)
+    return await _respond(svc, start_plan(svc, pid, {}), wait)
 
 
 @router.get("/projects/{pid}/timeline", response_model=TimelineView, tags=["editing"])
@@ -179,43 +223,20 @@ def put_timeline(pid: str, body: Timeline, svc: Services = Depends(services)) ->
 async def render(pid: str, body: RenderRequest | None = None, wait: bool = WAIT,
                  svc: Services = Depends(services)) -> Any:
     """Queue a render (one runs at a time). Result: the new output version."""
-    from engine.common import need
-    need("ffmpeg")
-    need("node")
-    _guard(svc, pid, ("plan", "revise", "render"))
-    if not (svc.store.dir(pid) / "work" / "edl.json").exists():
-        raise EngineError("this project has no plan yet: run plan first", code="no_plan", status=409)
-    draft = bool(body and body.draft)
-    job = svc.jobs.submit("render", lambda: pipeline.render(svc.store, pid, draft), project_id=pid, queue="render",
-                          on_error=_on_error(svc, pid))
-    return await _respond(svc, job, wait)
+    return await _respond(svc, start_render(svc, pid, {"draft": bool(body and body.draft)}), wait)
 
 
 @router.post("/projects/{pid}/revise", response_model=Job, status_code=202, tags=["editing"])
 async def revise(pid: str, body: ReviseRequest, wait: bool = WAIT, svc: Services = Depends(services)) -> Any:
     """Apply notes to the plan with the brain. Set render=true to queue a render afterwards."""
-    _guard(svc, pid, ("plan", "revise", "render"))
-
-    def then_render(_: Any) -> None:
-        if body.render:
-            svc.jobs.submit("render", lambda: pipeline.render(svc.store, pid), project_id=pid, queue="render",
-                            on_error=_on_error(svc, pid))
-
-    job = svc.jobs.submit("revise", lambda: pipeline.revise(svc.store, pid, body.notes, svc.brain_factory()),
-                          project_id=pid, on_error=_on_error(svc, pid), on_done=then_render)
-    return await _respond(svc, job, wait)
+    return await _respond(svc, start_revise(svc, pid, body.model_dump()), wait)
 
 
 @router.post("/projects/{pid}/reference", response_model=Job, status_code=202, tags=["editing"])
 async def reference(pid: str, body: ReferenceRequest | None = None, wait: bool = WAIT,
                     svc: Services = Depends(services)) -> Any:
     """REFERENCE mode: download the reel, measure it and let the brain write a style spec."""
-    _guard(svc, pid, ("reference", "plan"))
-    b = body or ReferenceRequest()
-    job = svc.jobs.submit("reference", lambda: pipeline.reference(svc.store, pid, svc.brain_factory(), b.url,
-                                                                  b.cookies_from_browser),
-                          project_id=pid, on_error=_on_error(svc, pid))
-    return await _respond(svc, job, wait)
+    return await _respond(svc, start_reference(svc, pid, (body or ReferenceRequest()).model_dump()), wait)
 
 
 # ---------------------------------------------------------------- outputs

@@ -2,27 +2,38 @@
 
 Two queues: "render" has one worker (one render at a time, the rest wait their turn); "general" has a small pool
 for analyse / plan / revise. Every job streams events (status, step + % done, log lines) to WebSocket subscribers
-and keeps its last log lines for GET /jobs/{id}. Job records live in memory; project state is on disk.
+and keeps its last log lines for GET /jobs/{id}.
+
+Job records are saved to the project's work/jobs.json on every status change (and at most once a second while a
+job reports progress), so a server restart doesn't lose them. restore() at startup reads them back; a job that was
+queued or running when the server stopped is marked "interrupted" and can be retried.
 """
 from __future__ import annotations
 
 import asyncio
 import contextvars
+import json
 import secrets
 import threading
+import time
 import traceback
 from collections import deque
 from concurrent.futures import Future, ThreadPoolExecutor
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any, Callable, Literal
 
 from pydantic import BaseModel, Field
 
-from engine.config import EngineError, use_reporter
+from engine.config import EngineError, paths, use_reporter
 
-JobStatus = Literal["queued", "running", "done", "failed", "cancelled"]
-FINISHED = ("done", "failed", "cancelled")
+JobStatus = Literal["queued", "running", "done", "failed", "cancelled", "interrupted"]
+FINISHED = ("done", "failed", "cancelled", "interrupted")
+RETRYABLE = ("failed", "cancelled", "interrupted")
 LOG_KEEP = 400
+LOG_SAVED = 100         # log lines kept per job in jobs.json
+FINISHED_SAVED = 50     # finished jobs kept per project in jobs.json (unfinished ones are always kept)
+SAVE_EVERY_S = 1.0      # progress updates are saved at most this often
 
 
 def _now() -> datetime:
@@ -44,6 +55,8 @@ class Job(BaseModel):
     log: list[str] = Field(default_factory=list)
     result: Any = None
     error: dict[str, Any] | None = None
+    params: dict[str, Any] = Field(default_factory=dict, description="what the job was asked to do (retry reuses it)")
+    retry_of: str | None = Field(None, description="the job this one retries")
 
 
 class _Record:
@@ -52,6 +65,7 @@ class _Record:
         self.log: deque[str] = deque(maxlen=LOG_KEEP)
         self.future: Future[Any] | None = None
         self.subscribers: set[asyncio.Queue[dict[str, Any]]] = set()
+        self.saved_at = 0.0
 
 
 class JobReporter:
@@ -70,6 +84,8 @@ class JobReporter:
         if pct is not None:
             j.progress = round(max(j.progress, min(100.0, float(pct))), 1)
         self.m._publish(self.rec, {"type": "step", "step": name, "progress": j.progress})
+        if time.monotonic() - self.rec.saved_at >= SAVE_EVERY_S:
+            self.m._save(self.rec)
 
 
 def _jsonable(x: Any) -> Any:
@@ -79,23 +95,28 @@ def _jsonable(x: Any) -> Any:
 
 
 class JobManager:
-    def __init__(self, general_workers: int = 2):
+    def __init__(self, general_workers: int = 2, root: Path | None = None):
         self.pools = {"render": ThreadPoolExecutor(1, thread_name_prefix="cutroom-render"),
                       "general": ThreadPoolExecutor(general_workers, thread_name_prefix="cutroom-job")}
         self.records: dict[str, _Record] = {}
         self.lock = threading.Lock()
+        self.save_lock = threading.Lock()
         self.loop: asyncio.AbstractEventLoop | None = None
+        self.root = Path(root or paths().workspace)
 
     # ------------------------------------------------------------ submit / run
 
     def submit(self, kind: str, fn: Callable[[], Any], project_id: str | None = None,
                queue: Literal["render", "general"] = "general",
                on_error: Callable[[BaseException], None] | None = None,
-               on_done: Callable[[Any], None] | None = None) -> Job:
-        job = Job(id=secrets.token_hex(6), kind=kind, project_id=project_id, queue=queue)
+               on_done: Callable[[Any], None] | None = None,
+               params: dict[str, Any] | None = None, retry_of: str | None = None) -> Job:
+        job = Job(id=secrets.token_hex(6), kind=kind, project_id=project_id, queue=queue, params=params or {},
+                  retry_of=retry_of)
         rec = _Record(job)
         with self.lock:
             self.records[job.id] = rec
+        self._save(rec)
         rec.future = self.pools[queue].submit(self._run, rec, fn, on_error, on_done)
         return self.get(job.id)
 
@@ -105,6 +126,7 @@ class JobManager:
         if j.status == "cancelled":
             return None
         j.status, j.started_at = "running", _now()
+        self._save(rec)
         self._publish(rec, {"type": "status", "status": "running"})
         rep = JobReporter(self, rec)
 
@@ -134,8 +156,75 @@ class JobManager:
                     pass
         finally:
             j.finished_at = _now()
+            self._save(rec)
             self._publish(rec, {"type": "status", "status": j.status, "error": j.error})
         return j.result
+
+    # ------------------------------------------------------------ on disk
+
+    def _file(self, project_id: str | None) -> Path:
+        return self.root / project_id / "work" / "jobs.json" if project_id else self.root / "jobs.json"
+
+    def _save(self, rec: _Record) -> None:
+        """Write the jobs of rec's project to its jobs.json (whole file, atomically)."""
+        pid = rec.job.project_id
+        f = self._file(pid)
+        if pid and not (self.root / pid / "project.json").exists():
+            return                                      # project deleted: don't bring its folder back
+        with self.save_lock:
+            with self.lock:
+                recs = sorted((r for r in self.records.values() if r.job.project_id == pid),
+                              key=lambda r: r.job.created_at)
+            finished = [r for r in recs if r.job.status in FINISHED]
+            drop = {id(r) for r in finished[:-FINISHED_SAVED]}
+            try:
+                out = []
+                for r in recs:
+                    if id(r) not in drop:
+                        d = r.job.model_dump(mode="json", exclude={"position"})
+                        d["log"] = list(r.log)[-LOG_SAVED:]
+                        out.append(d)
+                f.parent.mkdir(parents=True, exist_ok=True)
+                tmp = f.with_suffix(".json.tmp")
+                tmp.write_text(json.dumps(out, indent=1))
+                tmp.replace(f)
+            except (OSError, ValueError, TypeError):
+                return                                  # saving the record mustn't fail the job itself
+            rec.saved_at = time.monotonic()
+
+    def restore(self) -> list[Job]:
+        """Load the saved jobs (call once at startup). Jobs that were queued or running when the server stopped
+        are marked "interrupted"; returns those."""
+        files = [self._file(None), *sorted(self.root.glob("*/work/jobs.json"))]
+        interrupted: list[_Record] = []
+        for f in files:
+            try:
+                saved = json.loads(f.read_text()) if f.exists() else []
+            except (OSError, ValueError):
+                continue
+            for d in saved if isinstance(saved, list) else []:
+                try:
+                    job = Job.model_validate(d)
+                except ValueError:
+                    continue
+                if job.id in self.records:
+                    continue
+                rec = _Record(job)
+                rec.log.extend(job.log)
+                job.log = []
+                if job.status in ("queued", "running"):
+                    ran = job.status == "running"
+                    job.status, job.finished_at = "interrupted", _now()
+                    job.error = {"code": "interrupted", "status": 503, "hint": "Retry it to run it again.",
+                                 "message": "The server stopped while this job was running." if ran
+                                 else "The server stopped before this job started."}
+                    rec.log.append(f"INTERRUPTED: {job.error['message']}")
+                    interrupted.append(rec)
+                with self.lock:
+                    self.records[job.id] = rec
+        for pid in {r.job.project_id for r in interrupted}:
+            self._save(next(r for r in interrupted if r.job.project_id == pid))
+        return [self.get(r.job.id) for r in interrupted]
 
     # ------------------------------------------------------------ queries
 
@@ -179,6 +268,7 @@ class JobManager:
             raise EngineError(f"job {job_id} is {rec.job.status}; only queued jobs can be cancelled",
                               code="job_not_cancellable", status=409)
         rec.job.status, rec.job.finished_at = "cancelled", _now()
+        self._save(rec)
         self._publish(rec, {"type": "status", "status": "cancelled"})
         return self.get(job_id)
 

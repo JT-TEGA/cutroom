@@ -129,6 +129,10 @@ curl -s -X POST "$API/projects/$ID/revise?wait=true" -H 'content-type: applicati
 | `POST /projects/{id}/analyse` · `plan` · `render` · `revise` · `reference` | background jobs |
 | `GET/PUT /projects/{id}/timeline` | the plan, resolved to output times; save your own edits |
 | `GET /jobs/{id}`, `WS /ws/jobs/{id}` | status, step, % done, log lines, result |
+| `POST /jobs/{id}/retry` | run a failed, cancelled or interrupted job again with the same inputs |
+
+Job records are saved in each project's `work/jobs.json`, so they survive a server restart. A job that was queued
+or running when the server stopped comes back as `interrupted`, ready to retry.
 | `GET /projects/{id}/outputs`, `…/outputs/{v}/video` | versions; video streams with HTTP Range |
 | `GET /media/thumbnail?path=`, `GET /media/file?path=` | thumbnails; any workspace file, range-enabled |
 | `GET /presets`, `PUT /presets/{name}`, `GET/PUT /settings`, `GET /system/status` | configuration |

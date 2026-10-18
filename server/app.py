@@ -16,7 +16,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from engine import __version__
+from engine import __version__, pipeline
 from engine.config import EngineError, paths
 
 from .deps import Services
@@ -39,6 +39,11 @@ def create_app(services: Services | None = None) -> FastAPI:
     async def lifespan(app: FastAPI):
         svc.jobs.loop = asyncio.get_running_loop()
         paths().workspace.mkdir(parents=True, exist_ok=True)
+        for job in svc.jobs.restore():
+            if job.project_id and job.started_at:          # it was half-way through: the project shows the error
+                err = job.error or {}
+                pipeline.failed(svc.store, job.project_id,
+                                EngineError(err.get("message", ""), code="interrupted", hint=err.get("hint")))
         yield
         svc.jobs.shutdown()
 
