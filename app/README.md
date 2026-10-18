@@ -11,8 +11,22 @@ npm install
 npm run dev          # http://localhost:5173, expects the API on :8000 (CUTROOM_API_PORT to change)
 npm run gen:api      # regenerate src/api/schema.d.ts from the FastAPI OpenAPI schema (no server needed)
 npm run typecheck
-npm run build
+npm run lint         # rule tests + eslint (cutroom/effect-returns, react-hooks/rules-of-hooks)
+npm run build        # lint, then tsc, then vite build
 ```
+
+### Lint
+
+`eslint-rules/effect-returns.js` is a small custom rule: an effect may return nothing or a cleanup function.
+React calls whatever an effect returns when the component unmounts, so `useEffect(async () => ...)`,
+`useEffect(() => el.scrollTo({ top: 0 }))` (a Promise in newer Chrome) or `return setTimeout(...)` crash with
+"destroy is not a function". Its cases are in `eslint-rules/effect-returns.test.js`; both run in `npm run build`.
+
+### Errors
+
+Every screen sits under a React Router `errorElement` (`components/ErrorScreen.tsx`), so a crash shows an error
+screen inside the app (Go back, Reload, technical details with a copy button) instead of React Router's default
+page; an `AppErrorBoundary` catches anything outside the router. In dev, `/__crash` throws on purpose to show it.
 
 ## Layout
 
@@ -24,7 +38,10 @@ src/
   lib/          presets (groups, icons, defaults), status mapping, timeline edits, formatting
   pages/        Home, NewVideo, Settings, Presets, and project/: setup wizard, questions, job progress,
                 timeline review (bin · monitor · inspector · track), result
-scripts/        gen-api.mjs, walkthrough.mjs (end-to-end run with the demo brain + screenshots)
+scripts/        gen-api.mjs, walkthrough.mjs (end-to-end run with the demo brain + screenshots),
+                check-interactions.mjs (drag and drop, undo, edits), browser.mjs (shared: launch, error capture,
+                client-side navigation "hops")
+eslint-rules/   effect-returns.js (+ its tests)
 ```
 
 ## The API client

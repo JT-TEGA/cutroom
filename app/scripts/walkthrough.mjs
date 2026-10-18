@@ -7,22 +7,25 @@
 // A few side projects are created through the API (so the projects grid has something in every state); the main
 // one, "5AM chest day", goes through the UI: new video wizard -> questions -> plan -> timeline edits -> render ->
 // result -> revise -> v2. Screenshots (2x JPEG) land in docs/screenshots/.
+//
+// Along the way it leaves every screen and comes back (client-side, so screens really unmount), including in the
+// middle of planning and rendering, then sweeps every route; any page error or console error fails the run.
+// CUTROOM_CHROME=/Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome runs it in your own Chrome.
 import { mkdirSync, readFileSync } from "node:fs"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
-import puppeteer from "puppeteer"
+import { assertNoErrorScreen, BASE, go, hop, launch, sleep, watchErrors } from "./browser.mjs"
 
 const here = path.dirname(fileURLToPath(import.meta.url))
 const repo = path.resolve(here, "../..")
-const BASE = process.env.CUTROOM_URL ?? "http://localhost:5173"
 const MEDIA = path.join(repo, ".demo/media")
 const OUT = path.join(repo, "docs/screenshots")
 const PAGES_ONLY = process.argv.includes("--pages-only")    // just settings, presets and projects
 const USAGE_LIMIT = process.argv.includes("--usage-limit")  // the server runs with CUTROOM_DEMO_FAIL=usage_limit
-const SKIP_SEED = PAGES_ONLY || process.argv.includes("--no-seed")
+const SWEEP_ONLY = process.argv.includes("--sweep-only")    // just the every-route sweep + the error screen
+const SKIP_SEED = PAGES_ONLY || SWEEP_ONLY || process.argv.includes("--no-seed")
 mkdirSync(OUT, { recursive: true })
 
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 const log = (...a) => console.log("·", ...a)
 
 // ---------------------------------------------------------------- API helpers (seeding)
@@ -98,6 +101,7 @@ async function seed() {
 // ---------------------------------------------------------------- browser helpers
 
 let page
+let watch
 const shot = async (name, settle = 700) => {
   await sleep(settle)
   await page.screenshot({ path: path.join(OUT, `${name}.jpg`), type: "jpeg", quality: 90 })
@@ -106,12 +110,21 @@ const shot = async (name, settle = 700) => {
 const waitText = (text, timeout = 60_000) =>
   page.waitForFunction((t) => document.body.innerText.includes(t), { timeout, polling: 200 }, text)
 const waitUrl = (re, timeout = 60_000) => page.waitForFunction((r) => new RegExp(r).test(location.pathname), { timeout, polling: 200 }, re.source)
-// scroll targets to the middle first: near the bottom edge they sit under the sticky wizard footer
+// scroll targets to the middle first: near the bottom edge they sit under the sticky wizard footer.
+// Navigations render in a transition (the old screen stays up a moment after the URL changes), so an element can be
+// replaced between finding and clicking it: find it again and retry.
 async function press(selector) {
-  const h = await page.locator(selector).setTimeout(15_000).waitHandle()
-  await h.evaluate((el) => el.scrollIntoView({ block: "center" }))
-  await sleep(150)
-  await h.click()
+  for (let attempt = 1; ; attempt++) {
+    try {
+      const h = await page.locator(selector).setTimeout(15_000).waitHandle()
+      await h.evaluate((el) => el.scrollIntoView({ block: "center" }))
+      await sleep(150)
+      return await h.click()
+    } catch (e) {
+      if (attempt >= 4 || !/detached|not attached|Node is either not visible/i.test(String(e))) throw e
+      await sleep(400)
+    }
+  }
 }
 const click = (text, tag = "button") => press(`${tag} ::-p-text(${text})`)
 const idle = () => page.waitForNetworkIdle({ idleTime: 600, timeout: 20_000 }).catch(() => undefined)
@@ -123,15 +136,18 @@ async function type(selector, text) {
 async function main() {
   if (!SKIP_SEED) await seed()
 
-  const browser = await puppeteer.launch({ headless: true, defaultViewport: { width: 1440, height: 900, deviceScaleFactor: 2 }, args: ["--autoplay-policy=no-user-gesture-required"] })
+  const browser = await launch()
   page = await browser.newPage()
-  page.on("pageerror", (e) => console.error("page error:", e.message))
-  page.on("console", (msg) => msg.type() === "error" && !/Failed to load resource/.test(msg.text()) && console.error("console:", msg.text()))
+  watch = watchErrors(page)
 
   if (USAGE_LIMIT) {
     await usageLimit()
-    await browser.close()
-    return log("done")
+    return finish(browser)
+  }
+  if (SWEEP_ONLY) {
+    await page.goto(`${BASE}/`, { waitUntil: "networkidle0" })
+    await sweep()
+    return finish(browser)
   }
   if (!PAGES_ONLY) await mainFlow()
 
@@ -142,9 +158,11 @@ async function main() {
   await shot("17-settings", 2500)
   await page.evaluate(() => document.querySelector("#brain").scrollIntoView({ block: "start" }))
   await shot("17b-settings-brain", 900)
+  await hop(page, "/")
   await page.goto(`${BASE}/presets/gym-vlog`, { waitUntil: "networkidle0" })
   await waitText("presets/gym-vlog.md")
   await shot("18-presets", 1200)
+  await hop(page)
 
   const glow = (await api("/projects")).find((p) => p.name === "12-week glow up")
   if (glow && glow.status === "planned") await api(`/projects/${glow.id}/render`, { method: "POST", body: "{}" })
@@ -153,9 +171,55 @@ async function main() {
   await page.waitForFunction(() => /Rendering/.test(document.body.innerText), { timeout: 20_000 }).catch(() => undefined)
   await idle()
   await shot("01-projects", 3000)
+  await hop(page)
 
+  await sweep()
+  await finish(browser)
+}
+
+async function finish(browser) {
   await browser.close()
-  log("done")
+  if (watch.errors.length) {
+    console.error(`✗ ${watch.errors.length} error(s) in the browser:\n  ` + watch.errors.join("\n  "))
+    process.exit(1)
+  }
+  log("done: no page or console errors")
+}
+
+/** Every route, reached the way a user gets there and left again; then the error screen, and recovering from it. */
+async function sweep() {
+  const projects = await api("/projects")
+  const chest = projects.find((p) => p.name === "5AM chest day")
+  const bts = projects.find((p) => p.name === "Studio shoot BTS")
+  const job = (await api(`/jobs?project_id=${chest.id}`)).find((j) => j.status === "done")
+  const paths = [
+    "/", "/new", `/projects/${chest.id}`,
+    ...["type", "media", "idea", "review"].map((s) => `/projects/${chest.id}/setup/${s}`),
+    `/projects/${chest.id}/questions`, `/projects/${chest.id}/plan`, `/projects/${chest.id}/video`,
+    ...(job ? [`/projects/${chest.id}/jobs/${job.id}`] : []),
+    `/projects/${bts.id}/plan`, `/projects/${bts.id}/video`, `/projects/${bts.id}/setup/media`,
+    "/presets", "/presets/photo-dump", "/settings", "/no-such-page", "/projects/no-such-project",
+  ]
+  for (const p of paths) {
+    await go(page, p)
+    await assertNoErrorScreen(page, `on ${p}`)
+    await hop(page, p === "/" ? "/settings" : "/")
+  }
+  log(`sweep: ${paths.length} routes visited, left and revisited`)
+
+  // the error screen: a screen that throws shows it inside the shell, and Go back recovers
+  await watch.expecting(async () => {
+    await go(page, "/presets")
+    await go(page, "/__crash")
+    await waitText("Something went wrong on this screen")
+    await click("Technical details")
+    await shot("20-error-screen", 600)
+    await click("Go back")
+    await page.waitForFunction(() => location.pathname.startsWith("/presets"), { timeout: 10_000 })
+    await sleep(800)
+  })
+  await assertNoErrorScreen(page, "after Go back from the error screen")
+  log("error screen: shown for a crashing screen, Go back recovers")
 }
 
 /** With the demo brain failing like Claude Code at its usage limit: the job's error and the banner. */
@@ -172,11 +236,13 @@ async function mainFlow() {
   // 1. new video: content type
   await page.goto(`${BASE}/new`, { waitUntil: "networkidle0" })
   await waitText("Gym vlog")
+  await hop(page)
   await type("#video-name", "5AM chest day")
   await click("Gym vlog")
   await shot("02-new-video")
   await click("Continue")
   await waitUrl(/\/setup\/media$/)
+  await waitText("Add your media")
   const pid = page.url().split("/projects/")[1].split("/")[0]
   log("project", pid)
 
@@ -190,10 +256,12 @@ async function mainFlow() {
   await waitText("afro-drill-120.wav", 60_000)
   await idle()
   await shot("03-media", 1500)
+  await hop(page)
 
   // 3. the idea
   await click("Continue")
   await waitUrl(/\/setup\/idea$/)
+  await waitText("Describe the video")
   await click("Voiceover")
   await type('textarea[name="idea"]', "5AM to brunch: chest day, a walk by the lagoon, brunch with the girls. Show the discipline without being preachy, and make the training part hit.")
   await type('input[name="hook"]', "The 5:30 alarm, phone in hand")
@@ -203,20 +271,29 @@ async function mainFlow() {
   await click("Punchy")
   await page.evaluate(() => document.querySelector("#main").scrollTo({ top: 0 }))
   await shot("04-idea", 1500)
+  await hop(page)                                   // leaving the step saves what was typed (flush on unmount)
+  const brief = (await api(`/projects/${pid}`)).brief
+  if (!brief.idea?.startsWith("5AM to brunch") || !brief.labels?.includes("Lekki brunch"))
+    throw new Error(`the brief wasn't saved when its step closed: ${JSON.stringify(brief).slice(0, 300)}`)
 
   // 4. review -> generate
   await click("Continue")
   await waitUrl(/\/setup\/review$/)
+  await waitText("Ready to plan")
   await idle()
   await shot("05-review", 1200)
+  await hop(page)
   await click("Generate plan")
 
   // 5. Claude reads the brief
   await waitText("Claude is reading your brief", 20_000)
   await shot("06-claude-reading", 1400)
+  await hop(page, "/")                              // mid-analyse: the job page reconnects (or moves on if it finished)
 
   // 6. questions
   await waitUrl(/\/questions$/, 30_000)
+  await waitText("from Claude")
+  await hop(page)
   await waitText("from Claude")
   await sleep(800)
   await click("Incline bench")
@@ -231,8 +308,10 @@ async function mainFlow() {
   await click("Show log")
   await sleep(4000)
   await shot("08-plan-progress", 300)
+  await hop(page, "/")                              // mid-planning
   await waitText("Claude is planning", 240_000)
   await shot("09-claude-planning", 1600)
+  await hop(page, `/projects/${pid}/setup/review`)  // while Claude is planning
 
   // 8. the timeline
   await waitUrl(/\/plan$/, 120_000)
@@ -247,6 +326,7 @@ async function mainFlow() {
     await sleep(500)
     await shot("12-timeline-text", 900)
   }
+  await hop(page)
 
   // 9. approve & render
   await click("Approve & render")
@@ -258,24 +338,28 @@ async function mainFlow() {
   }, { timeout: 300_000, polling: 300 })
   await click("Show log")
   await shot("13-render", 1200)
+  await hop(page, "/")                              // mid-render
 
   // 10. the result
   await waitUrl(/\/video$/, 600_000)
   await waitText("Version 1")
   await idle()
   await shot("14-result", 2500)
+  await hop(page)
 
   // 11. request changes -> v2
   await type('textarea[placeholder^="Open on the bench"]', 'Make the first label say "5AM" and use flash cuts between shots')
   await click("Revise & render")
   await waitText("Claude is revising the plan", 30_000)
   await shot("15-claude-revising", 1400)
+  await hop(page)                                   // mid-revise: coming back follows on to the render
   await page.waitForFunction(() => /Rendering/.test(document.body.innerText) && location.pathname.includes("/jobs/"), { timeout: 120_000 })
+  await hop(page, "/presets")                       // mid-render of v2
   await waitUrl(/\/video$/, 600_000)
   await waitText("Version 2")
   await idle()
   await shot("16-result-v2", 2500)
-
+  await hop(page)
 }
 
 main().catch((e) => {

@@ -3,10 +3,8 @@
 // the walkthrough's projects (node app/scripts/walkthrough.mjs first).
 //
 //   CUTROOM_URL=http://localhost:5173 node app/scripts/check-interactions.mjs
-import puppeteer from "puppeteer"
+import { BASE, hop, launch, sleep, watchErrors } from "./browser.mjs"
 
-const BASE = process.env.CUTROOM_URL ?? "http://localhost:5173"
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 const api = async (p) => (await fetch(`${BASE}/api${p}`)).json()
 let failures = 0
 const check = (ok, what) => {
@@ -33,9 +31,9 @@ async function drag(page, from, to) {
   await page.mouse.up()
 }
 
-const browser = await puppeteer.launch({ headless: true, defaultViewport: { width: 1440, height: 900 } })
+const browser = await launch({ width: 1440, height: 900 })
 const page = await browser.newPage()
-page.on("pageerror", (e) => check(false, `no page errors (${e.message})`))
+const watch = watchErrors(page)
 const projects = await api("/projects")
 const find = (name) => projects.find((p) => p.name === name)
 
@@ -48,6 +46,8 @@ check(tiles.length === before.length, `media step shows ${before.length} sortabl
 await page.evaluate(() => document.querySelectorAll("[aria-roledescription='sortable']").forEach((el, i) => el.setAttribute("data-i", String(i))))
 await drag(page, "[data-i='0']", "[data-i='2']")
 check(await until(async () => (await api(`/projects/${bts.id}/files`))[2].name === before[0]), `dragging clip 1 to place 3 saves the new order (${before[0]} is now 3rd)`)
+await hop(page)
+check((await page.$$("[aria-roledescription='sortable']")).length === before.length, "after leaving and coming back the clips are all there")
 
 // 2. timeline: reorder segments, undo
 const legs = find("Leg day routine")
@@ -62,17 +62,18 @@ await page.keyboard.down("Meta")
 await page.keyboard.press("z")
 await page.keyboard.up("Meta")
 check(await until(async () => JSON.stringify(await order()) === JSON.stringify(o1)), "⌘Z puts it back")
+await hop(page)
 
 // 3. swap a clip in from the media bin
 await sleep(600)
 const files = await api(`/projects/${legs.id}/files`)
 const other = files.find((f) => f.kind === "clip" && f.path !== o1[0])
-await page.evaluate((id) => document.querySelector(`[data-bin='${id}']`) || null, other.id)
 const bin = await page.$$(`[title^="${other.name}"]`)
 check(bin.length > 0, `media bin shows ${other.name}`)
 await page.evaluate((name) => document.querySelector(`[title^="${name}"]`).setAttribute("data-drag", "1"), other.name)
 await drag(page, "[data-drag='1']", "[data-shot='1']")
 check(await until(async () => (await order())[0] === other.path), `dropping ${other.name} on shot 1 swaps it in`)
+await hop(page)
 
 // 4. delete a shot with the keyboard, then undo
 await sleep(600)
@@ -85,6 +86,7 @@ await page.keyboard.down("Meta")
 await page.keyboard.press("z")
 await page.keyboard.up("Meta")
 check(await until(async () => (await order()).length === n), "⌘Z brings it back")
+await hop(page)
 
 // 5. edit a label's text in the inspector
 await sleep(600)
@@ -96,8 +98,10 @@ if (tl.text?.length) {
   await page.keyboard.type("Squats 5x5")
   await page.keyboard.press("Enter")
   check(await until(async () => (await api(`/projects/${legs.id}/timeline`)).timeline.text[0].text === "Squats 5x5"), "editing a label saves it")
+  await hop(page)
 }
 
 await browser.close()
+check(watch.errors.length === 0, `no page or console errors${watch.errors.length ? ":\n  " + watch.errors.join("\n  ") : ""}`)
 console.log(failures ? `${failures} check(s) failed` : "all interactions work")
 process.exit(failures ? 1 : 0)

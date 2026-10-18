@@ -131,6 +131,8 @@ http://127.0.0.1:8000/docs).
 | **Settings**: handle, colours, captions with a live preview in the real font, music levels, end card | **Brain**: Claude Code or the Anthropic API, with connection status and the system check |
 | ![Presets](docs/screenshots/18-presets.jpg) | ![Usage limit](docs/screenshots/19-usage-limit.jpg) |
 | **Presets**: each content type's notes and defaults, editable | **When Claude can't work** (usage limit, logged out, not installed, no API key) a banner says what to do |
+| ![Claude revising](docs/screenshots/15-claude-revising.jpg) | ![Error screen](docs/screenshots/20-error-screen.jpg) |
+| **Revising**: your notes go to Claude, then straight to a new render | **If a screen ever crashes**: a calm error screen inside the app with Go back / Reload and the technical details folded away |
 
 The screenshots come from a real end-to-end run against `./cutroom --demo`: synthetic footage, a `say` voice memo
 and a generated beat track went through the wizard, the pipeline (transcription, voice clean-up, beat detection,
@@ -222,8 +224,13 @@ Paths to shared resources can be moved with `CUTROOM_ROOT`, `CUTROOM_WORKSPACE`,
 ```bash
 .venv/bin/python -m pytest        # 72 tests, ~20 s; never calls Claude (the brain is mocked)
 .venv/bin/ruff check .
-cd app && npm run typecheck       # the app; npm run gen:api regenerates its typed client from the FastAPI schema
+cd app && npm run lint            # the app's lint (also runs in npm run build); npm run gen:api regenerates its typed client
 ```
+
+`npm run lint` includes `cutroom/effect-returns` (app/eslint-rules/), which fails on any `useEffect` that can return
+something other than a cleanup function: async effects, one-line effects like `useEffect(() => el.scrollTo(...))`,
+`return setTimeout(...)`. React calls whatever an effect returns when the screen unmounts, so those crash with
+"destroy is not a function" (newer Chrome made `scrollTo()` return a Promise, which is how one slipped in).
 
 The end-to-end test generates tiny clips, a photo and a 120 BPM track, then plans, edits, renders, revises and
 renders again through the API.
@@ -236,6 +243,11 @@ The app is checked end to end in a real browser (headless Chrome via Puppeteer) 
 node app/scripts/walkthrough.mjs                   # every screen, start to finish -> docs/screenshots/*.jpg
 node app/scripts/check-interactions.mjs            # drag to reorder, swap from the bin, delete + undo, edit a label
 ```
+
+Both leave every screen and come back (client-side, so screens really unmount), including mid-planning and
+mid-render; the walkthrough then sweeps every route and the error screen (`--sweep-only` runs just that). Any page
+error or console error fails the run. They use Puppeteer's Chrome; to test your own browser, point
+`CUTROOM_CHROME` at it, e.g. `CUTROOM_CHROME="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"`.
 
 `CUTROOM_DEMO_FAIL=usage_limit ./cutroom --demo` makes the demo brain fail like Claude Code at its usage limit
 (`node app/scripts/walkthrough.mjs --usage-limit` takes that screenshot).
