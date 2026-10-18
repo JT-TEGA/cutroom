@@ -57,12 +57,16 @@ def parse(text):
 
 def blank(v):
     v = (v or "").strip()
-    return not v or bool(PLACEHOLDER.match(v)) or v in CHOICES or "preset default" == v.lower()
+    return not v or bool(PLACEHOLDER.match(v)) or v in CHOICES or v.lower() in ("preset default", "brand default")
 
 
-def body_text(body, key):
-    """Section text without bullet fields like '- End card ...'."""
-    return "\n".join(l for l in body.get(key, "").splitlines() if not re.match(r"^\s*-\s*[^:]+:", l)).strip()
+def body_text(body, key, fields=()):
+    """Section text without the named bullet fields ('- End card with my handle: on'). Only named fields are
+    dropped, so a label like '- 6:30AM call time' stays."""
+    def is_field(line):
+        m = re.match(r"^\s*-\s*([^:]+):", line)
+        return bool(m) and m.group(1).strip().lower() in fields
+    return "\n".join(l for l in body.get(key, "").splitlines() if not is_field(l)).strip()
 
 
 def clip_list(text):
@@ -134,7 +138,7 @@ def parse_markdown(text):
         beat_sync=_val(f, "beat sync"),
         sound_effects=_val(f, "sound effects"),
         pacing=sec("pacing & effects"),
-        call_to_action=body_text(body, "call to action"),
+        call_to_action=body_text(body, "call to action", ("end card with my handle", "end card")),
         end_card=_val(f, "end card with my handle", "end card"),
         avoid=sec("avoid"),
     )
@@ -161,7 +165,7 @@ def parse_cues(lines, known=None):
             continue
         clips = [x for x in clip_list(c) if not x["src"].startswith(("voiceover/", "inputs/voiceover/"))]
         if not clips:
-            for tok in re.findall(r"[\w\-. ]+?\.\w{2,5}\b", c):
+            for tok in re.findall(r"[\w\-.]+\.\w{2,5}\b", c):
                 hit = known.get(tok.strip().lower())
                 if hit:
                     clips = [{"src": hit, "in": None, "out": None}]
