@@ -55,6 +55,7 @@ ignore = [
 # the pipeline modules carried over from scripts/ keep their compact style
 "engine/{autocut,beats,brief,contact_sheet,edl,facetrack,make_sfx,media,moments,plan,reference,render,transcribe,voice}.py" = ["E501", "E731", "B007", "UP031"]
 "tests/test_brain.py" = ["E501"]   # canned CLI output lines
+"scripts/demo_media.py" = ["E501"]  # drawing code: coordinates and colour stops read best on one line
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

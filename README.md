@@ -8,10 +8,14 @@ The editing decisions (which take to keep, which shot shows which line, where la
 through **your logged-in Claude Code, headless: no API key needed**. Everything mechanical (transcription, silence
 cutting, beat detection, framing, rendering) is a deterministic Python pipeline.
 
-> Status: **Phase 1 — engine + backend API.** The React app (Phase 2) comes next.
+![The timeline review: every shot with the words heard over it, labels, voiceover and music lanes, and the reason for each cut](docs/screenshots/10-timeline.jpg)
 
-![Cutroom app screenshot placeholder](docs/screenshots/app-placeholder.png)
-<!-- screenshot: project view with the timeline (Phase 2) -->
+```bash
+./cutroom            # starts the API and the app, opens http://localhost:5173
+./cutroom --demo     # the same with a scripted brain and a separate demo workspace: try it without using Claude
+```
+
+> Status: **Phase 2: the app.** Phase 1 built the engine and the API; Phase 2 adds the React app on top.
 
 ---
 
@@ -20,7 +24,7 @@ cutting, beat detection, framing, rendering) is a deterministic Python pipeline.
 ```mermaid
 flowchart LR
     subgraph clients[" "]
-        UI["React app<br/>(Phase 2)"]
+        UI["React app<br/><code>app/</code>"]
         CLI["scripts/ve<br/>command line"]
     end
 
@@ -96,8 +100,43 @@ It uses Claude Sonnet 5.5 (`claude-sonnet-5-5`) unless `anthropic_model` in the 
 ## Run
 
 ```bash
-scripts/ve serve                  # http://127.0.0.1:8000  ·  API docs: http://127.0.0.1:8000/docs
+./cutroom                         # API on :8000 + app on :5173, opens the browser; Ctrl-C stops both
+./cutroom --demo                  # scripted brain + .demo/ workspace (your projects and brand.md untouched)
+./cutroom --no-open               # don't open the browser
 ```
+
+`./cutroom` installs the app's npm packages on its first run. If port 8000 or 5173 is taken, it says so; pick
+others with `CUTROOM_API_PORT` / `CUTROOM_APP_PORT`. The API alone: `scripts/ve serve` (docs at
+http://127.0.0.1:8000/docs).
+
+## The app
+
+| | |
+|---|---|
+| ![Projects](docs/screenshots/01-projects.jpg) | ![New video: content type](docs/screenshots/02-new-video.jpg) |
+| **Projects**: every video with its status (draft, planning, needs review, rendering, done), live progress, search and a filter by content type | **New video, step 1**: the content type, grouped Lifestyle / Fashion / Gym |
+| ![Media](docs/screenshots/03-media.jpg) | ![The idea](docs/screenshots/04-idea.jpg) |
+| **Step 2, media**: drop clips and photos, a voice memo and a track; drag to reorder, click a name to rename it | **Step 3, the idea**: the brief as a form that autosaves; the preset's defaults are the placeholders, advanced fields fold away |
+| ![Review](docs/screenshots/05-review.jpg) | ![Claude reading the brief](docs/screenshots/06-claude-reading.jpg) |
+| **Step 4, review**: checks and what happens next | **Claude reads the brief** (live over the job WebSocket) |
+| ![Questions](docs/screenshots/07-questions.jpg) | ![Planning progress](docs/screenshots/08-plan-progress.jpg) |
+| **Questions**: anything Claude needs, asked once, with suggested answers and the assumptions it will make | **Planning**: each stage of the pipeline, the progress bar and the log |
+| ![Claude is planning](docs/screenshots/09-claude-planning.jpg) | ![A shot and its reason](docs/screenshots/11-timeline-shot.jpg) |
+| **Claude is planning…** while the brain call runs | **Timeline review**: click a shot for the reason it's there, the words heard over it, its transition; swap or delete it |
+| ![Editing a label](docs/screenshots/12-timeline-text.jpg) | ![Rendering](docs/screenshots/13-render.jpg) |
+| **Labels**: edit the text and style; drag shots to reorder, drop a clip from Media onto a shot to swap it, ⌘Z to undo | **Rendering**: live progress per stage |
+| ![Result](docs/screenshots/14-result.jpg) | ![Version 2](docs/screenshots/16-result-v2.jpg) |
+| **Result**: the 9:16 player, Download, Open in Finder, request changes, the contact sheet | **Version 2** after “make the first label say 5AM and use flash cuts”: versions side by side |
+| ![Settings](docs/screenshots/17-settings.jpg) | ![Brain settings](docs/screenshots/17b-settings-brain.jpg) |
+| **Settings**: handle, colours, captions with a live preview in the real font, music levels, end card | **Brain**: Claude Code or the Anthropic API, with connection status and the system check |
+| ![Presets](docs/screenshots/18-presets.jpg) | ![Usage limit](docs/screenshots/19-usage-limit.jpg) |
+| **Presets**: each content type's notes and defaults, editable | **When Claude can't work** (usage limit, logged out, not installed, no API key) a banner says what to do |
+
+The screenshots come from a real end-to-end run against `./cutroom --demo`: synthetic footage, a `say` voice memo
+and a generated beat track went through the wizard, the pipeline (transcription, voice clean-up, beat detection,
+rendering) and the scripted brain. See [Development](#development) to regenerate them.
+
+## From the terminal
 
 A whole edit from the terminal (`?wait=true` blocks until a job is done; without it you get a job to poll or
 stream from `ws://127.0.0.1:8000/ws/jobs/<id>`):
@@ -128,15 +167,16 @@ curl -s -X POST "$API/projects/$ID/revise?wait=true" -H 'content-type: applicati
 | `GET/POST /projects`, `GET/PATCH/DELETE /projects/{id}`, `POST /projects/import` | projects; import a `briefs/*.md` |
 | `POST/GET/PATCH /projects/{id}/files`, `PATCH/DELETE /projects/{id}/files/{file}` | uploads (HEIC ok), order, rename, trims |
 | `POST /projects/{id}/analyse` · `plan` · `render` · `revise` · `reference` | background jobs |
-| `GET/PUT /projects/{id}/timeline` | the plan, resolved to output times; save your own edits |
+| `GET/PUT /projects/{id}/timeline` | the plan, resolved to output times (each shot knows its segment); save your own edits |
+| `GET /projects/{id}/voiceover`, `POST /projects/{id}/reveal` | voice preview + clean-up numbers; show a render in Finder |
 | `GET /jobs/{id}`, `WS /ws/jobs/{id}` | status, step, % done, log lines, result |
 | `POST /jobs/{id}/retry` | run a failed, cancelled or interrupted job again with the same inputs |
 
 Job records are saved in each project's `work/jobs.json`, so they survive a server restart. A job that was queued
 or running when the server stopped comes back as `interrupted`, ready to retry.
-| `GET /projects/{id}/outputs`, `…/outputs/{v}/video` | versions; video streams with HTTP Range |
-| `GET /media/thumbnail?path=`, `GET /media/file?path=` | thumbnails; any workspace file, range-enabled |
-| `GET /presets`, `PUT /presets/{name}`, `GET/PUT /settings`, `GET /system/status` | configuration |
+| `GET /projects/{id}/outputs`, `…/outputs/{v}/video` | versions; video streams with HTTP Range (`?download=true` to save) |
+| `GET /media/thumbnail?path=&t=`, `GET /media/file?path=` | thumbnails (at a time); any workspace file, range-enabled |
+| `GET /presets`, `PUT /presets/{name}`, `GET/PUT /settings`, `GET /system/status`, `GET /fonts/{file}` | configuration |
 
 ## The command line still works
 
@@ -163,11 +203,14 @@ engine/            the pipeline as a package
   config.py        configurable paths, per-job layout, progress reporting
   render.py …      framing, overlay, audio mix, export (carried over from the chat era)
 server/            FastAPI app, routes, background job queue
-app/               React frontend (Phase 2)
+app/               React app: Vite, TypeScript, Tailwind + shadcn/ui, TanStack Query (see app/README.md)
+cutroom            one command: API + app + browser (--demo for the scripted brain)
 presets/           content-type presets (photo-dump, gym-vlog, …): notes + settings
 brand.md           the creator's look; its settings block is what GET/PUT /settings edits
 assets/            fonts, SFX
+scripts/           ve (the CLI), setup.sh, demo_media.py (synthetic footage for demos)
 tests/             pytest: brief parsing, timeline schema, brain (mocked), API, end-to-end render
+docs/screenshots/  the app, from the walkthrough below
 workspace/         projects (git-ignored)
 ```
 
@@ -177,23 +220,27 @@ Paths to shared resources can be moved with `CUTROOM_ROOT`, `CUTROOM_WORKSPACE`,
 ## Development
 
 ```bash
-.venv/bin/python -m pytest        # 57 tests, ~20 s; never calls Claude (the brain is mocked)
+.venv/bin/python -m pytest        # 72 tests, ~20 s; never calls Claude (the brain is mocked)
 .venv/bin/ruff check .
+cd app && npm run typecheck       # the app; npm run gen:api regenerates its typed client from the FastAPI schema
 ```
 
 The end-to-end test generates tiny clips, a photo and a 120 BPM track, then plans, edits, renders, revises and
 renders again through the API.
 
-## Screenshots
+The app is checked end to end in a real browser (headless Chrome via Puppeteer) against the demo brain:
 
-| | |
-|---|---|
-| ![Brief and questions (placeholder)](docs/screenshots/brief-placeholder.png) | ![Timeline (placeholder)](docs/screenshots/timeline-placeholder.png) |
-| *Brief + clarifying questions* | *Timeline with the reason for every cut* |
-| ![Render progress (placeholder)](docs/screenshots/render-placeholder.png) | ![Contact sheet (placeholder)](docs/screenshots/contact-placeholder.png) |
-| *Live render progress* | *Contact sheet review* |
+```bash
+.venv/bin/python scripts/demo_media.py             # synthetic clips, photos, a voice memo, a track -> .demo/media
+./cutroom --demo --no-open &
+node app/scripts/walkthrough.mjs                   # every screen, start to finish -> docs/screenshots/*.jpg
+node app/scripts/check-interactions.mjs            # drag to reorder, swap from the bin, delete + undo, edit a label
+```
+
+`CUTROOM_DEMO_FAIL=usage_limit ./cutroom --demo` makes the demo brain fail like Claude Code at its usage limit
+(`node app/scripts/walkthrough.mjs --usage-limit` takes that screenshot).
 
 ## Roadmap
 
-- **Phase 2:** React app: upload, brief form with the brain's questions, timeline editor, player, version compare.
+- ~~Phase 1: engine + API~~ · ~~Phase 2: the React app~~
 - Packaged desktop build; multi-user workspaces.

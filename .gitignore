@@ -68,3 +68,7 @@ assets/sfx/*.wav
 .DS_Store
 .vscode/
 .idea/
+
+# app build output and the demo workspace (./cutroom --demo)
+app/dist/
+.demo/
