@@ -1,0 +1,266 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  html, body { margin: 0; padding: 0; background: transparent; overflow: hidden; }
+  /* one corner pixel is always transparent, so every PNG keeps its alpha channel even when a
+     full-screen card covers the frame (ffmpeg stops reading an image sequence that switches RGBA -> RGB) */
+  #stage { position: relative; width: 1080px; height: 1920px; overflow: hidden;
+           clip-path: polygon(0 0, 100% 0, 100% 100%, 1px 100%, 1px calc(100% - 1px), 0 calc(100% - 1px)); }
+  .layer { position: absolute; pointer-events: none; }
+  .row { left: 0; width: 100%; display: flex; justify-content: center; }
+  .box { text-align: center; transform-origin: 50% 50%; text-wrap: balance; }
+  .stroke { paint-order: stroke fill; -webkit-text-stroke-linejoin: round; }
+  .cap .w { display: inline-block; margin: 0 0.02em; transform-origin: 50% 60%; }
+  .flash { position: absolute; inset: 0; background: #fff; }
+  .dim { position: absolute; inset: 0; background: rgba(0,0,0,0.38); }
+  .end { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 28px; }
+  .end img { width: 34%; max-height: 24%; object-fit: contain; margin-bottom: 20px; }
+  svg { display: block; }
+</style>
+</head>
+<body>
+<div id="stage"></div>
+<script>
+/* Deterministic overlay renderer.
+   describe(t) -> plain data for everything visible at time t (also the cache key)
+   draw(i)     -> paints frame i. Node only screenshots frames whose description changed. */
+let S = null;
+const stage = document.getElementById('stage');
+const clamp = (v, a = 0, b = 1) => Math.max(a, Math.min(b, v));
+const easeOut = x => 1 - Math.pow(1 - clamp(x), 3);
+const easeBack = x => { x = clamp(x); const c = 1.7; return 1 + (c + 1) * Math.pow(x - 1, 3) + c * Math.pow(x - 1, 2); };
+const q = v => Math.round(v * 1000) / 1000;
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const SHADOW = 'text-shadow:0 2px 5px rgba(0,0,0,0.45),0 6px 26px rgba(0,0,0,0.35);';
+const ICONS = {
+  pin: '<svg width="1em" height="1em" viewBox="0 0 24 24"><path fill="currentColor" d="M12 2C8.1 2 5 5.1 5 9c0 5.2 7 13 7 13s7-7.8 7-13c0-3.9-3.1-7-7-7zm0 9.5A2.5 2.5 0 1 1 12 6.5a2.5 2.5 0 0 1 0 5z"/></svg>',
+  clock: '<svg width="1em" height="1em" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="2.4"/><path d="M12 7v5l3 2" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg>',
+};
+
+window.setup = async (spec) => {
+  S = spec;
+  stage.style.width = S.width + 'px';
+  stage.style.height = S.height + 'px';
+  for (const f of S.fonts) {
+    const ff = new FontFace(f.family, `url("${f.url}")`, { weight: f.weight || 'normal', style: f.style || 'normal' });
+    document.fonts.add(await ff.load());
+  }
+  if (S.endcard && S.endcard.logo) {
+    const img = new Image(); img.src = S.endcard.logo;
+    try { await img.decode(); } catch (e) { S.endcard.logo = null; }
+  }
+  await document.fonts.ready;
+  return true;
+};
+
+const DEFAULT_ANIM = { big: 'pop', title: 'pop', 'title-minimal': 'fade', 'title-serif': 'fade', lower: 'slide',
+  label: 'pop', caption: 'pop', sticker: 'pop', timestamp: 'slide', lower3: 'slide-left', card: 'pop',
+  macros: 'pop', credits: 'fade' };
+
+function anim(kind, t, s, e) {
+  const age = t - s, left = e - t;
+  let o = 1, sc = 1, dy = 0, dx = 0, chars = 1;
+  if (kind === 'pop') { sc = 0.7 + 0.3 * easeBack(age / 0.22); o = clamp(age / 0.08); }
+  else if (kind === 'slide') { const k = easeOut(age / 0.25); dy = (1 - k) * 50; o = k; }
+  else if (kind === 'slide-left') { const k = easeOut(age / 0.3); dx = (1 - k) * -80; o = k; }
+  else if (kind === 'fade') { o = easeOut(age / 0.3); }
+  else if (kind === 'type') { chars = clamp(age / 0.5); }
+  if (kind !== 'none' && left < 0.12) o *= clamp(left / 0.12);
+  return { o: q(o), sc: q(sc), dy: q(dy), dx: q(dx), chars: q(chars) };
+}
+
+function subItems(x) {
+  if (x.style === 'macros') return (x.items || []).map(m => Array.isArray(m) ? m : (() => {
+    const p = String(m).trim().split(/\s+/); return [p.slice(0, -1).join(' '), p[p.length - 1]]; })());
+  if (x.style === 'credits') return (x.lines || []).map(l => {
+    const p = String(l).split(/\s+[—–-]\s+|:\s*/); return p.length > 1 ? [p[0], p.slice(1).join(' ')] : ['', p[0]]; });
+  return null;
+}
+
+function describe(t) {
+  const d = [];
+  const st = S.style;
+  for (const p of S.captions) {
+    if (t < p.s || t >= p.e) continue;
+    let active = -1;
+    p.words.forEach((w, i) => { if (t >= w.s) active = i; });
+    const still = st.caption_animation === 'none';
+    const sc = still ? 1 : q(0.9 + 0.1 * easeBack((t - p.s) / 0.14));
+    const wp = active >= 0 && !still ? q(1 + 0.08 * (1 - easeOut((t - p.words[active].s) / 0.12))) : 1;
+    d.push({ k: 'cap', id: p.id, a: active, sc, wp });
+  }
+  S.texts.forEach((x, i) => {
+    if (t < x.s || t >= x.e) return;
+    const kind = x.anim || DEFAULT_ANIM[x.style] || 'pop';
+    const el = { k: 'txt', i, ...anim(kind, t, x.s, x.e) };
+    const subs = subItems(x);
+    if (subs) el.items = subs.map((_, j) => anim(kind, t, x.s + 0.09 * (j + 1), x.e));
+    d.push(el);
+  });
+  for (const f of S.flashes) {
+    const age = t - f;
+    if (age >= 0 && age < 0.16) d.push({ k: 'flash', o: q(0.85 * (1 - age / 0.16)) });
+  }
+  const ec = S.endcard;
+  if (ec && t >= ec.s && t < ec.e) d.push({ k: 'end', a1: anim('slide', t, ec.s + 0.05, 1e9), a2: anim('fade', t, ec.s + 0.3, 1e9) });
+  return d;
+}
+
+window.allKeys = (n) => {
+  const keys = [];
+  for (let i = 0; i < n; i++) keys.push(JSON.stringify(describe(i / S.fps)));
+  return keys;
+};
+
+const stroke = (px, color) => `-webkit-text-stroke:${px * 2}px ${color};`;
+function textLook(px, color) { return px > 0 ? stroke(px, color) : SHADOW; }
+function caseCss(c) { return c === 'upper' ? 'text-transform:uppercase;' : c === 'lower' ? 'text-transform:lowercase;' : ''; }
+function rich(text, accent) {
+  return esc(text).replace(/\*(.+?)\*/g, `<span style="color:${accent}">$1</span>`).replace(/\\n|\n/g, '<br>');
+}
+
+// layer wrapper: centred row, or anchored at x (centre or left edge)
+function place(x, y, inner, el, left = false, extra = '') {
+  const W = S.width, H = S.height;
+  const tr = `translate(${el.dx || 0}px, ${el.dy || 0}px)`;
+  if (x === undefined || x === null) {
+    if (left) x = 0.07; else
+      return `<div class="layer row" style="top:${y * H}px;transform:translateY(-50%) ${tr};opacity:${el.o};${extra}">${inner}</div>`;
+  }
+  const anchor = left ? 'translate(0,-50%)' : 'translate(-50%,-50%)';
+  return `<div class="layer" style="left:${x * W}px;top:${y * H}px;transform:${anchor} ${tr};opacity:${el.o};${extra}">${inner}</div>`;
+}
+
+function drawText(x, el) {
+  const st = S.style, W = S.width;
+  const acc = x.accent || st.emphasis_color || st.accent_color;
+  let text = x.text || '';
+  if (el.chars < 1) text = text.slice(0, Math.ceil(text.length * el.chars));
+  const tf = st.title_font, lf = st.label_font, tw = st.title_weight;
+  const tcase = caseCss(x.upper === true ? 'upper' : x.upper === false ? 'as-is' : st.title_case);
+  const look = textLook(st.title_outline_px, st.title_outline_color);
+  const color = x.color || st.title_color;
+  const sc = `transform:scale(${el.sc});`;
+  switch (x.style) {
+    case 'sticker': {
+      const icon = x.icon === 'none' ? '' : (ICONS[x.icon || 'pin'] || '');
+      return place(x.x, x.y ?? 0.12, `<div style="${sc}transform-origin:0 50%;display:inline-flex;align-items:center;gap:12px;
+        background:${x.bg || 'rgba(255,255,255,0.94)'};color:${x.color || '#111'};font-family:'${lf}';font-weight:600;
+        font-size:${x.size || 44}px;padding:16px 30px 16px ${icon ? 22 : 30}px;border-radius:999px;
+        box-shadow:0 8px 30px rgba(0,0,0,0.25);white-space:nowrap">${icon}<span>${rich(text, acc)}</span></div>`, el, true);
+    }
+    case 'timestamp':
+      return place(x.x, x.y ?? 0.1, `<div style="text-align:left;${SHADOW}color:${color}">
+        <div style="font-family:'${tf}';font-weight:${tw};font-size:${x.size || 88}px;line-height:1">${rich(text, acc)}</div>
+        ${x.sub ? `<div style="font-family:'${lf}';font-weight:500;font-size:40px;opacity:0.9;margin-top:8px">${esc(x.sub)}</div>` : ''}
+        </div>`, el, true);
+    case 'lower3':
+      return place(x.x ?? 0, x.y ?? 0.78, `<div style="display:flex;gap:22px;align-items:stretch;padding:22px 80px 22px 0;
+        background:linear-gradient(90deg,rgba(0,0,0,0.6),rgba(0,0,0,0));border-radius:0 18px 18px 0">
+        <div style="width:12px;background:${acc};border-radius:0 6px 6px 0"></div>
+        <div style="color:${color};${SHADOW}">
+          <div style="font-family:'${tf}';font-weight:${tw};font-size:${x.size || 70}px;line-height:1.05;${tcase}">${rich(text, acc)}</div>
+          ${x.sub ? `<div style="font-family:'${lf}';font-weight:600;font-size:48px;opacity:0.92;margin-top:8px">${esc(x.sub)}</div>` : ''}
+        </div></div>`, el, true);
+    case 'card': {
+      const panel = x.fill ? '' : `background:${x.bg || 'rgba(0,0,0,0.55)'};`;
+      const inner = `<div style="${sc}max-width:${0.84 * W}px;${panel}padding:48px 56px;border-radius:32px;text-align:center;color:${color}">
+        <div style="font-family:'${tf}';font-weight:${tw};font-size:${x.size || 86}px;line-height:1.08;text-wrap:balance;${tcase}">${rich(text, acc)}</div>
+        ${x.sub ? `<div style="font-family:'${lf}';font-weight:500;font-size:42px;opacity:0.85;margin-top:20px">${esc(x.sub)}</div>` : ''}</div>`;
+      const fill = x.fill ? `<div class="layer" style="inset:0;background:${x.bg || '#111111'};opacity:${el.o}"></div>` : '';
+      return fill + place(x.x, x.y ?? (x.fill ? 0.5 : 0.42), inner, el);
+    }
+    case 'macros': {
+      const items = subItems(x);
+      const cols = items.length === 4 ? 2 : Math.min(items.length, 3);
+      const cards = items.map(([lab, val], j) => {
+        const a = el.items[j];
+        return `<div style="opacity:${a.o};transform:scale(${a.sc});background:${x.bg || 'rgba(255,255,255,0.95)'};
+          border-radius:26px;padding:22px 30px;min-width:200px;text-align:center;box-shadow:0 10px 30px rgba(0,0,0,0.25)">
+          <div style="font-family:'${tf}';font-weight:${tw};font-size:${x.size || 66}px;line-height:1.05;color:${x.color || '#111'}">${esc(val)}</div>
+          <div style="font-family:'${lf}';font-weight:600;font-size:28px;letter-spacing:3px;text-transform:uppercase;
+            color:${x.color || '#111'};opacity:0.62;margin-top:6px">${esc(lab)}</div></div>`;
+      }).join('');
+      const title = text ? `<div style="font-family:'${tf}';font-weight:${tw};font-size:50px;color:#fff;${SHADOW}margin-bottom:24px">${rich(text, acc)}</div>` : '';
+      return place(x.x, x.y ?? 0.3, `<div style="text-align:center">${title}<div style="display:grid;
+        grid-template-columns:repeat(${cols},auto);gap:18px;justify-content:center">${cards}</div></div>`, { ...el, sc: 1 });
+    }
+    case 'credits': {
+      const lines = subItems(x).map(([role, name], j) => {
+        const a = el.items[j];
+        return `<div style="opacity:${a.o};margin:22px 0">
+          ${role ? `<div style="font-family:'${lf}';font-weight:500;font-size:28px;letter-spacing:6px;text-transform:uppercase;opacity:0.75">${esc(role)}</div>` : ''}
+          <div style="font-family:'${tf}';font-weight:${tw};font-size:${x.size || 64}px;line-height:1.1">${esc(name)}</div></div>`;
+      }).join('');
+      const head = text ? `<div style="font-family:'${tf}';font-weight:${tw};font-size:76px;margin-bottom:24px">${rich(text, acc)}</div>` : '';
+      return `<div class="dim" style="opacity:${el.o}"></div>` +
+        place(x.x, x.y ?? 0.5, `<div style="text-align:center;color:${color};${SHADOW}">${head}${lines}</div>`, { ...el, o: 1 });
+    }
+    case 'label':
+      return place(x.x, x.y ?? 0.10, `<div style="${sc}background:${x.bg || st.accent_color};color:${x.color || st.accent_text_color};
+        font-family:'${lf}';font-weight:700;font-size:${x.size || 44}px;padding:12px 30px;border-radius:999px;
+        white-space:nowrap;box-shadow:0 8px 24px rgba(0,0,0,0.25)">${rich(text, acc)}</div>`, el);
+    case 'title-minimal':
+      return place(x.x, x.y ?? 0.48, `<div class="box" style="${sc}max-width:${0.84 * W}px;font-family:'${lf}';font-weight:600;
+        font-size:${x.size || 56}px;color:${color};${SHADOW}letter-spacing:0.5px">${rich(text, acc)}</div>`, el);
+    case 'title-serif':
+      return place(x.x, x.y ?? 0.42, `<div class="box" style="${sc}max-width:${0.86 * W}px;font-family:'${tf}';font-weight:${tw};
+        font-style:${x.italic ? 'italic' : 'normal'};font-size:${x.size || 124}px;line-height:1.0;color:${color};${SHADOW}">${rich(text, acc)}</div>`, el);
+    case 'lower':
+      return place(x.x, x.y ?? 0.76, `<div class="box" style="${sc}max-width:${0.84 * W}px;font-family:'${lf}';font-weight:700;
+        font-size:${x.size || 56}px;color:${color};${SHADOW}${tcase}">${rich(text, acc)}</div>`, el);
+    case 'caption':
+      return place(x.x, x.y ?? st.caption_position, `<div class="box" style="${sc}max-width:${0.8 * W}px;font-family:'${st.caption_font}';
+        font-weight:${st.caption_weight};font-size:${x.size || st.caption_size}px;color:${color};
+        ${textLook(st.caption_outline_px, st.caption_outline_color)}${caseCss(st.caption_case)}">${rich(text, acc)}</div>`, el);
+    case 'title':
+    case 'big':
+    default: {
+      const big = x.style !== 'title';
+      return place(x.x, x.y ?? (big ? 0.4 : 0.22), `<div class="box stroke" style="${sc}max-width:${0.86 * W}px;font-family:'${tf}';
+        font-weight:${tw};font-size:${x.size || (big ? 150 : 104)}px;line-height:1.0;color:${color};${look}${tcase}">${rich(text, acc)}</div>`, el);
+    }
+  }
+}
+
+function draw(i) {
+  const t = i / S.fps, st = S.style, W = S.width, H = S.height;
+  const html = [];
+  for (const el of describe(t)) {
+    if (el.k === 'cap') {
+      const p = S.captions.find(c => c.id === el.id);
+      const words = p.words.map((w, j) => {
+        const on = j === el.a;
+        const col = on ? st.caption_highlight_color : st.caption_color;
+        const op = on ? 1 : st.caption_inactive_opacity;
+        return `<span class="w" style="color:${col};opacity:${op};transform:scale(${on ? el.wp : 1})">${esc(w.t)}</span>`;
+      }).join(' ');
+      html.push(`<div class="layer row cap" style="top:${st.caption_position * H}px;transform:translateY(-50%)">
+        <div class="box stroke fit1" data-max="${0.8 * W}" style="white-space:nowrap;font-family:'${st.caption_font}';
+          font-weight:${st.caption_weight};font-size:${st.caption_size}px;line-height:1.1;
+          ${textLook(st.caption_outline_px, st.caption_outline_color)}${caseCss(st.caption_case)}transform:scale(${el.sc})">${words}</div></div>`);
+    } else if (el.k === 'txt') {
+      html.push(drawText(S.texts[el.i], el));
+    } else if (el.k === 'flash') {
+      html.push(`<div class="flash" style="opacity:${el.o}"></div>`);
+    } else if (el.k === 'end') {
+      const ec = S.endcard;
+      html.push(`<div class="end">
+        ${ec.logo ? `<img src="${ec.logo}" style="opacity:${el.a2.o}">` : ''}
+        ${ec.text ? `<div style="opacity:${el.a2.o};font-family:'${st.label_font}';font-weight:500;font-size:42px;color:#fff;${SHADOW}">${esc(ec.text)}</div>` : ''}
+        <div style="opacity:${el.a1.o};transform:translateY(${el.a1.dy}px);font-family:'${st.title_font}';font-weight:${st.title_weight};
+          font-size:76px;color:#fff;${SHADOW}">${esc(ec.handle)}</div></div>`);
+    }
+  }
+  stage.innerHTML = html.join('');
+  for (const el of stage.querySelectorAll('.fit1')) {   // captions stay on one line
+    const max = +el.dataset.max, w = el.scrollWidth;
+    if (w > max) el.style.fontSize = (parseFloat(el.style.fontSize) * max / w).toFixed(1) + 'px';
+  }
+}
+window.draw = draw;
+</script>
+</body>
+</html>

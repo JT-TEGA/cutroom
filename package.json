@@ -1,0 +1,16 @@
+{
+  "name": "creator-video-editor",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Short-form 9:16 editing pipeline for personal creator content (Reels / TikTok)",
+  "type": "commonjs",
+  "scripts": {
+    "overlays": "node scripts/render_overlays.js"
+  },
+  "dependencies": {
+    "puppeteer": "^24.0.0"
+  },
+  "optionalDependencies": {
+    "hyperframes": "*"
+  }
+}

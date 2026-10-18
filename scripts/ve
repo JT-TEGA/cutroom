@@ -1,0 +1,57 @@
+#!/usr/bin/env bash
+# One entry point for the pipeline. Run from anywhere:
+#   scripts/ve brief briefs/my-video.md          read brief + preset + brand, list gaps
+#   scripts/ve presets                           list content-type presets
+#   scripts/ve ref my-video <url> [--cookies chrome]   REFERENCE mode: download + analyse reel
+#   scripts/ve media raw/shoot-oct/              list a folder in capture order
+#   scripts/ve transcribe raw/a.mp4 [--show]     word-level transcript (cached; folders ok)
+#   scripts/ve vo voiceover/vo.m4a [--force]     clean a voiceover (noise, de-ess, compression, -16 LUFS) + transcript
+#   scripts/ve draft my-video raw/a.mp4 raw/folder/ [--preset X --music Y --talk no --vo voiceover/v.m4a]   draft plan
+#   scripts/ve moments raw/a.mp4                 best no-talk moments in a clip
+#   scripts/ve plan my-video [--cuts]            timeline preview of work/my-video/edl.json
+#   scripts/ve render my-video [--draft]         export output/my-video.mp4 + contact sheet
+#   scripts/ve faces raw/a.mp4 [--preview]       check face tracking on a clip
+#   scripts/ve beats music/track.mp3             BPM, beats, downbeats, drops
+#   scripts/ve sheet output/x.mp4 [--times ..]   contact sheet for any video
+#   scripts/ve sfx                               (re)generate the starter SFX kit
+#   scripts/ve doctor                            check every tool is installed
+set -euo pipefail
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+PY="$ROOT/.venv/bin/python"
+S="$ROOT/scripts"
+export OPENCV_LOG_LEVEL=ERROR PYTHONUNBUFFERED=1
+cd "$ROOT"
+cmd="${1:-help}"; shift || true
+case "$cmd" in
+  brief)      exec "$PY" "$S/brief.py" "$@" ;;
+  ref|reference) name="$1"; shift; exec "$PY" "$S/reference.py" --name "$name" "$@" ;;
+  transcribe) exec "$PY" "$S/transcribe.py" "$@" ;;
+  vo|voice)   exec "$PY" "$S/voice.py" "$@" ;;
+  draft|autocut) name="$1"; shift; exec "$PY" "$S/autocut.py" --name "$name" "$@" ;;
+  moments)    exec "$PY" "$S/moments.py" "$@" ;;
+  media)      exec "$PY" "$S/media.py" "$@" ;;
+  presets)    for f in "$ROOT"/presets/*.md; do printf "  %-22s %s\n" "$(basename "$f" .md)" "$(sed -n '2p' "$f")"; done ;;
+  plan)       exec "$PY" "$S/plan.py" "$@" ;;
+  render)     exec "$PY" "$S/render.py" "$@" ;;
+  faces)      exec "$PY" "$S/facetrack.py" "$@" ;;
+  beats)      exec "$PY" "$S/beats.py" "$@" ;;
+  sheet)      exec "$PY" "$S/contact_sheet.py" "$@" ;;
+  sfx)        exec "$PY" "$S/make_sfx.py" "$@" ;;
+  doctor)
+    ok=1
+    for b in ffmpeg ffprobe node; do command -v "$b" >/dev/null && echo "ok   $b" || { echo "MISSING $b"; ok=0; }; done
+    [ -x "$PY" ] && echo "ok   python venv" || { echo "MISSING .venv (run scripts/setup.sh)"; ok=0; }
+    "$PY" - <<'EOF' 2>/dev/null || ok=0
+import importlib
+for m in ["faster_whisper", "cv2", "numpy", "yt_dlp", "librosa", "PIL", "pillow_heif"]:
+    try:
+        mod = importlib.import_module(m); print("ok  ", m, getattr(mod, "__version__", ""))
+    except Exception as e:
+        print("MISSING", m, e)
+EOF
+    [ -f "$S/models/face_detection_yunet_2023mar.onnx" ] && echo "ok   face model" || { echo "MISSING face model"; ok=0; }
+    node -e "require('puppeteer'); console.log('ok   puppeteer')" 2>/dev/null || { echo "MISSING puppeteer (npm install)"; ok=0; }
+    ls "$ROOT"/assets/fonts/*.ttf >/dev/null 2>&1 && echo "ok   fonts" || echo "MISSING fonts"
+    [ "$ok" = 1 ] && echo "all good" || exit 1 ;;
+  *) sed -n '2,20p' "$0" | sed 's/^# \{0,1\}//' ;;
+esac

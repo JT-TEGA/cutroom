@@ -1,0 +1,70 @@
+# environments
+.venv/
+node_modules/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+.env
+.env.*
+!.env.example
+
+# user data: projects, footage, renders, work files
+workspace/
+raw/
+music/
+voiceover/
+output/
+work/
+briefs/*
+!briefs/_TEMPLATE.md
+
+# model caches and downloaded / generated assets (scripts/setup.sh fetches them)
+scripts/models/*.onnx
+engine/models/*.onnx
+.cache/
+huggingface/
+assets/fonts/*.ttf
+assets/fonts/*.otf
+assets/sfx/*.wav
+
+# media files anywhere
+*.mp4
+*.mov
+*.m4v
+*.mkv
+*.webm
+*.avi
+*.mts
+*.3gp
+*.m4a
+*.wav
+*.mp3
+*.aac
+*.aif
+*.aiff
+*.caf
+*.flac
+*.ogg
+*.opus
+*.jpg
+*.jpeg
+*.png
+*.heic
+*.heif
+*.webp
+*.tif
+*.tiff
+*.bmp
+*.gif
+*.cube
+# docs images are fine
+!docs/**/*.png
+!docs/**/*.jpg
+!docs/**/*.svg
+
+# OS / editors
+.DS_Store
+.vscode/
+.idea/
