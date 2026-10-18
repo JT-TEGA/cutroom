@@ -1,4 +1,5 @@
-"""Test fixtures. Tests never call Claude (the Brain is mocked) and never touch the real workspace or brand.md."""
+"""Test fixtures. Tests never call Claude (the Brain is mocked) and never touch the real workspace, brand.md or
+Photos library."""
 from __future__ import annotations
 
 import json
@@ -32,6 +33,7 @@ def cutroom_paths(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> config.Pat
     for var in [v for v in list(__import__("os").environ) if v.startswith("CUTROOM_")]:
         monkeypatch.delenv(var, raising=False)
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    monkeypatch.setenv("CUTROOM_PHOTOS", "denied")      # tests never read the real Photos library
     root = tmp_path / "root"
     for sub in ("raw", "music", "voiceover", "briefs"):
         (root / sub).mkdir(parents=True)

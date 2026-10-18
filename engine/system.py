@@ -79,6 +79,11 @@ def status(include_claude: bool = True) -> SystemStatus:
                         detail=f"Python {platform.python_version()} ({sys.executable})"
                                + (f"; missing: {', '.join(missing)}" if missing else ""),
                         hint="pip install -e '.[dev]'" if missing else None))
+    if sys.platform == "darwin":
+        ox = importlib.util.find_spec("osxphotos") is not None
+        checks.append(Check(id="osxphotos", label="Import from Photos (osxphotos)", ok=ox, required=False,
+                            detail="installed" if ox else "missing",
+                            hint=None if ox else "pip install -e '.[dev]' (only for importing from the Photos app)"))
     model = str(load_brand().get("whisper_model", "large-v3-turbo"))
     cached, where = whisper_model_cached(model)
     checks.append(Check(id="whisper_model", label=f"Whisper model ({model})", ok=cached, required=False,

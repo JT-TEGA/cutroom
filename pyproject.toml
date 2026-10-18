@@ -22,6 +22,7 @@ dependencies = [
     "python-multipart>=0.0.9",
     "pydantic>=2.7",
     "python-dotenv>=1.0",
+    "osxphotos>=0.77; sys_platform == 'darwin'",   # Import from Photos (reads the Mac Photos library)
 ]
 
 [project.optional-dependencies]
