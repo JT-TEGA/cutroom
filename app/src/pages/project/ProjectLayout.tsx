@@ -19,7 +19,9 @@ function EditableName({ project }: { project: Project }) {
   const patch = usePatchProject(project.id)
   const [editing, setEditing] = useState(false)
   const [value, setValue] = useState(project.name)
-  useEffect(() => setValue(project.name), [project.name])
+  useEffect(() => {
+    setValue(project.name)
+  }, [project.name])
   const save = () => {
     setEditing(false)
     const v = value.trim()

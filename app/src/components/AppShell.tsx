@@ -130,7 +130,11 @@ function Sidebar() {
 export function AppShell() {
   const main = useRef<HTMLElement>(null)
   const { pathname } = useLocation()
-  useEffect(() => main.current?.scrollTo({ top: 0 }), [pathname])   // each screen opens at the top
+  useEffect(() => {
+    // each screen opens at the top (a plain assignment: scrollTo() returns a Promise in newer Chrome, and an effect
+    // must never return anything but a cleanup function)
+    if (main.current) main.current.scrollTop = 0
+  }, [pathname])
   return (
     <div className="flex h-screen overflow-hidden">
       <Sidebar />

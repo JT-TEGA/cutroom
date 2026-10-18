@@ -4,6 +4,7 @@ import { createRoot } from "react-dom/client"
 import { RouterProvider } from "react-router"
 import { toast } from "sonner"
 import type { ApiError } from "@/api/client"
+import { AppErrorBoundary } from "@/components/ErrorScreen"
 import { Toaster } from "@/components/ui/sonner"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import { reportBrainIssue } from "@/lib/brain-issue"
@@ -28,11 +29,13 @@ const queryClient = new QueryClient({
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
-    <QueryClientProvider client={queryClient}>
-      <TooltipProvider delayDuration={300}>
-        <RouterProvider router={router} />
-        <Toaster position="top-right" offset={{ top: 68, right: 20 }} />
-      </TooltipProvider>
-    </QueryClientProvider>
+    <AppErrorBoundary>
+      <QueryClientProvider client={queryClient}>
+        <TooltipProvider delayDuration={300}>
+          <RouterProvider router={router} />
+          <Toaster position="top-right" offset={{ top: 68, right: 20 }} />
+        </TooltipProvider>
+      </QueryClientProvider>
+    </AppErrorBoundary>
   </StrictMode>,
 )

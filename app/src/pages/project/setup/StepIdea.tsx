@@ -134,7 +134,12 @@ export function StepIdea({ project }: { project: Project }) {
       { onSuccess: () => setState("saved"), onError: () => setState("idle") },
     )
   }
-  useEffect(() => () => flush(), []) // eslint-disable-line react-hooks/exhaustive-deps
+  // save what's left when the step closes (through a ref, so it's the latest flush with the latest edits)
+  const flushRef = useRef(flush)
+  flushRef.current = flush
+  useEffect(() => {
+    return () => flushRef.current()
+  }, [])
 
   const set = <K extends keyof Brief>(k: K, v: Brief[K]) => {
     setB((x) => ({ ...x, [k]: v }))

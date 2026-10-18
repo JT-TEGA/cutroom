@@ -44,7 +44,9 @@ function Line({ label, value, children }: { label: string; value?: ReactNode; ch
 
 function ColorField({ label, value, onChange }: { label: string; value: string | null | undefined; onChange: (v: string) => void }) {
   const [text, setText] = useState(value ?? "")
-  useEffect(() => setText(value ?? ""), [value])
+  useEffect(() => {
+    setText(value ?? "")
+  }, [value])
   return (
     <div className="flex items-center gap-3 rounded-xl border border-white/[0.06] bg-white/[0.02] p-2.5">
       <label className="relative size-9 shrink-0 cursor-pointer overflow-hidden rounded-lg border border-white/15 shadow-inner" style={{ background: value ?? "#000" }}>
