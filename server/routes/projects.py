@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, Query, status
 from fastapi.responses import JSONResponse, PlainTextResponse
@@ -11,7 +11,7 @@ from pydantic import BaseModel, Field
 from engine import pipeline
 from engine.config import EngineError, paths
 from engine.models import BriefData
-from engine.project import Project, ProjectSummary
+from engine.project import InAppSound, Project, ProjectSummary
 from engine.timeline import Timeline, TimelineView
 
 from ..deps import Services, services
@@ -108,7 +108,7 @@ def patch_project(pid: str, body: ProjectPatch, svc: Services = Depends(services
 
 @router.delete("/projects/{pid}", status_code=status.HTTP_204_NO_CONTENT, tags=["projects"])
 def delete_project(pid: str, svc: Services = Depends(services)) -> None:
-    busy = svc.jobs.active(pid, ("analyse", "plan", "render", "revise", "reference"))
+    busy = svc.jobs.active(pid, ("analyse", "plan", "render", "revise", "reference", "photos-import"))
     if busy:
         raise EngineError(f"a {busy.kind} job is {busy.status} for this project", code="project_busy", status=409)
     svc.store.delete(pid)
@@ -251,6 +251,9 @@ class OutputVersion(BaseModel):
     contact_sheet: str | None
     video_url: str
     contact_sheet_url: str | None
+    post_video: str | None = Field(None, description="the copy without the music (posting with the in-app sound)")
+    post_video_url: str | None = None
+    in_app: InAppSound | None = Field(None, description="the song and the start point to pick in Instagram/TikTok")
     size_bytes: int
     duration: float | None = None
     draft: bool | None = None
@@ -264,14 +267,16 @@ def outputs(pid: str, svc: Services = Depends(services)) -> list[OutputVersion]:
     for o in pipeline.outputs(svc.store, pid):
         out.append(OutputVersion(**o, video_url=f"/projects/{pid}/outputs/{o['version']}/video",
                                  contact_sheet_url=f"/projects/{pid}/outputs/{o['version']}/contact"
-                                 if o["contact_sheet"] else None))
+                                 if o["contact_sheet"] else None,
+                                 post_video_url=f"/projects/{pid}/outputs/{o['version']}/post"
+                                 if o["post_video"] else None))
     return out
 
 
 def output_file(svc: Services, pid: str, version: int, what: str) -> Path:
     for o in pipeline.outputs(svc.store, pid):
         if o["version"] == version:
-            rel = o["video"] if what == "video" else o["contact_sheet"]
+            rel = {"video": o["video"], "post": o["post_video"]}.get(what, o["contact_sheet"])
             if rel:
                 return svc.store.dir(pid) / rel
     raise EngineError(f"no {what} for version {version}", code="output_not_found", status=404)
@@ -283,6 +288,29 @@ def reveal(pid: str, body: RevealRequest | None = None, svc: Services = Depends(
     from engine.system import reveal as show
     svc.store.get(pid)
     show(output_file(svc, pid, body.version, "video") if body and body.version else svc.store.dir(pid))
+
+
+class MusicInfo(BaseModel):
+    file_id: str
+    name: str
+    path: str = Field(description="relative to the project folder")
+    duration: float
+    bpm: float
+    peaks: list[float] = Field(description="the waveform, evenly spaced over the song (0..1)")
+    drops: list[float] = Field(description="seconds into the song where the energy jumps")
+    length: float = Field(description="the edit's target length, for the stretch of song it uses")
+    auto_start: float = Field(description="where the edit starts when the creator hasn't picked a point")
+    auto_reason: Literal["drop", "loudest", "first-downbeat", "preset", "preset-drop"]
+    auto_drop: float | None = None
+    start: float | None = Field(None, description="the creator's own start point (brief.music_start)")
+    in_app: bool = Field(description="posting with the song added in Instagram/TikTok (brief.music_in_app)")
+
+
+@router.get("/projects/{pid}/music", response_model=MusicInfo, tags=["editing"])
+def music(pid: str, svc: Services = Depends(services)) -> MusicInfo:
+    """The song for the Music step: waveform, BPM, drops and where the edit starts (auto, or the creator's pick).
+    Set the start with PATCH /projects/{id} {"brief": {"music_start": 42}} (null = auto)."""
+    return MusicInfo(**pipeline.music_info(svc.store, pid))
 
 
 class VoiceoverInfo(BaseModel):

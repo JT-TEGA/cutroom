@@ -12,6 +12,7 @@ status in step. Long-running: call them from a background job.
 """
 from __future__ import annotations
 
+import re
 import shutil
 from pathlib import Path
 from typing import Any
@@ -32,12 +33,15 @@ from .brain.schemas import AnalyseResult, ClipMatchResult
 from .common import list_presets, load_transcript, read_json, style_for, transcribe_subprocess, write_json
 from .config import EngineError, job_log, log, progress_span, step
 from .models import StyleSpec
-from .project import Project, ProjectStore, RenderInfo
+from .project import Project, ProjectFile, ProjectStore, RenderInfo
 
 # ---------------------------------------------------------------- helpers
 
 def _analysis(store: ProjectStore, proj: Project) -> dict[str, Any]:
     a = B.analyse(proj.brief, proj.id, clips=store.clip_refs(proj), auto_pick_music=True)
+    # the Music step's start point is applied on every view and render (music_choice), not baked into the plan,
+    # so going back to "auto" later gives the plan's own start again
+    a["style_overrides"].pop("music_start", None)
     if proj.style_spec and proj.style_spec.style_overrides:     # reference style < the brief's own overrides
         a["style_overrides"] = {**proj.style_spec.style_overrides, **a["style_overrides"]}
     B.write(a)
@@ -98,7 +102,7 @@ def _save_plan(store: ProjectStore, pid: str, tl: T.Timeline, summary: str | Non
         if p.status not in ("rendering",):
             p.status = "planned"
         p.last_error = None
-    return T.view(tl)
+    return _view(store.get(pid), tl)
 
 
 def failed(store: ProjectStore, pid: str, err: BaseException) -> None:
@@ -249,13 +253,79 @@ def plan(store: ProjectStore, pid: str, brain: Brain) -> T.TimelineView:
 
 # ---------------------------------------------------------------- the creator's own edits
 
+def music_choice(proj: Project) -> dict[str, Any]:
+    """The creator's song settings from the Music step: the start point (when they picked one) and posting with the
+    in-app sound. They're applied over the plan's music block on every view and render, never saved into the plan:
+    a plan made before they changed (or a brain that dropped them) still follows them, and "auto" gives the plan's
+    own start back."""
+    out: dict[str, Any] = {"in_app": bool(proj.brief.music_in_app)}
+    if proj.brief.music_start is not None:
+        out["start"] = round(float(proj.brief.music_start), 3)
+    return out
+
+
+def _view(proj: Project, tl: T.Timeline) -> T.TimelineView:
+    """The plan laid out with the creator's music choices; .timeline stays the plan as saved (what the app edits
+    and sends back)."""
+    shown = tl
+    if tl.music:
+        shown = tl.model_copy(update={"music": tl.music.model_copy(update=music_choice(proj))})
+    v = T.view(shown)
+    v.timeline = tl
+    return v
+
+
+def music_track(proj: Project) -> ProjectFile | None:
+    """The track the edit is cut to: the one the brief names, else the newest upload."""
+    music = [f for f in proj.files if f.kind == "music"]
+    named = (proj.brief.track or "").strip().lower()
+    return next((f for f in music if named and f.name.lower() == named), music[-1] if music else None)
+
+
+def _target_length(proj: Project, cfg: dict[str, Any]) -> float:
+    m = re.search(r"(\d+(?:\.\d+)?)", proj.brief.target_length or "")
+    if m:
+        return float(m.group(1)) * (60 if "min" in (proj.brief.target_length or "").lower() else 1)
+    return float(cfg["target_length"])
+
+
+def music_info(store: ProjectStore, pid: str) -> dict[str, Any]:
+    """The song for the Music step: waveform, beats, drops, where "auto" would start the edit, and the creator's
+    own start point and in-app choice."""
+    proj = store.get(pid)
+    f = music_track(proj)
+    if f is None:
+        raise EngineError("no music uploaded yet", code="no_music", status=404)
+    ctype = (proj.brief.content_type or "").strip().lower()
+    with store.context(pid):
+        from .beats import beats_for, best_start
+        cfg = style_for({"preset": ctype if ctype in list_presets() else None})
+        bt = beats_for(f.path)
+        length = _target_length(proj, cfg)
+        best = best_start(bt, length)
+    pstart = cfg["music_start"]
+    auto, reason, drop = best["start"], best["reason"], best["drop"]
+    if isinstance(pstart, (int, float)) and not isinstance(pstart, bool):
+        auto, reason, drop = float(pstart), "preset", None
+    elif str(pstart) == "auto":
+        auto, reason, drop = (bt["downbeats"] or bt["beats"] or [0.0])[0], "first-downbeat", None
+    elif str(pstart).startswith("drop"):
+        reason, drop = "preset-drop", (bt["drops"] or [None])[0]
+    if proj.brief.music_in_app:
+        auto = float(round(auto))
+    return {"file_id": f.id, "name": f.name, "path": f.path, "duration": bt["duration"], "bpm": bt["bpm"],
+            "peaks": bt["peaks"], "drops": bt["drops"], "length": round(length, 2), "auto_start": round(auto, 3),
+            "auto_reason": reason, "auto_drop": drop, "start": proj.brief.music_start,
+            "in_app": proj.brief.music_in_app}
+
+
 def get_timeline(store: ProjectStore, pid: str) -> T.TimelineView:
-    store.get(pid)
+    proj = store.get(pid)
     with store.context(pid) as cwd:
         data = read_json(cwd / "work" / "edl.json")
         if data is None:
             raise EngineError("this project has no plan yet: run plan first", code="no_plan", status=404)
-        return T.view(T.parse(data))
+        return _view(proj, T.parse(data))
 
 
 def save_timeline(store: ProjectStore, pid: str, tl: T.Timeline) -> T.TimelineView:
@@ -280,10 +350,11 @@ def render(store: ProjectStore, pid: str, draft: bool = False) -> RenderInfo:
         raise EngineError("this project has no plan yet: run plan first", code="no_plan", status=409)
     _set_status(store, pid, "rendering")
     with store.context(pid):
-        res = R.render(pid, draft=draft)
+        res = R.render(pid, draft=draft, music=music_choice(proj))
     info = RenderInfo(version=res["version"], video=res["output"], contact_sheet=res["contact_sheet"],
                       duration=round(res["duration"], 3), size_bytes=res["size_bytes"], draft=draft,
-                      plan_version=proj.plan_version, audio=res.get("audio") or {})
+                      plan_version=proj.plan_version, audio=res.get("audio") or {},
+                      post_video=res.get("post_video"), in_app=res.get("in_app"))
     with store.edit(pid) as p:
         p.renders.append(info)
         p.status = "rendered"
@@ -327,11 +398,14 @@ def outputs(store: ProjectStore, pid: str) -> list[dict[str, Any]]:
     for vd in sorted((x for x in d.glob("v*") if x.is_dir() and x.name[1:].isdigit()),
                      key=lambda x: -int(x.name[1:])):
         n = int(vd.name[1:])
-        video = next(iter(sorted(vd.glob("*.mp4"))), None)
+        video = next(iter(sorted(x for x in vd.glob("*.mp4") if not x.stem.endswith("_post"))), None)
         if video is None:
             continue
+        post = R.post_path(video)
         r = by_version.get(n)
         out.append({"version": n, "video": str(video.relative_to(store.dir(pid))),
+                    "post_video": str(post.relative_to(store.dir(pid))) if post.exists() else None,
+                    "in_app": r.in_app.model_dump() if r and r.in_app else None,
                     "contact_sheet": str((vd / "contact.jpg").relative_to(store.dir(pid)))
                     if (vd / "contact.jpg").exists() else None,
                     "size_bytes": video.stat().st_size, "duration": r.duration if r else None,

@@ -35,6 +35,15 @@ def output_video(pid: str, version: int, download: bool = Query(False, descripti
                         content_disposition_type="attachment" if download else "inline")
 
 
+@router.get("/projects/{pid}/outputs/{version}/post", response_class=FileResponse, responses=RANGE_DOC)
+def output_post(pid: str, version: int, download: bool = Query(False, description="as an attachment (save as)"),
+                svc: Services = Depends(services)) -> FileResponse:
+    """The copy without the music, to post with the song added in Instagram/TikTok."""
+    p = output_file(svc, pid, version, "post")
+    return FileResponse(p, media_type="video/mp4", filename=p.name,
+                        content_disposition_type="attachment" if download else "inline")
+
+
 @router.get("/projects/{pid}/outputs/{version}/contact", response_class=FileResponse)
 def output_contact(pid: str, version: int, svc: Services = Depends(services)) -> FileResponse:
     return FileResponse(output_file(svc, pid, version, "contact"), media_type="image/jpeg")

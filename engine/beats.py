@@ -5,8 +5,10 @@
   beats.py music/track.mp3 --all      # every beat time
 
 Cached at work/_cache/beats/<key>.json
-  {"bpm": 104.2, "beats": [...], "downbeats": [...], "drops": [...]}
+  {"bpm": 104.2, "beats": [...], "downbeats": [...], "drops": [...], "energy": [...], "peaks": [...]}
 "drops" = moments where the track's energy jumps (the drop after a build-up), snapped to a downbeat.
+"energy" = loudness every ENERGY_STEP seconds (0..1); "peaks" = PEAKS points of waveform for drawing it.
+best_start() picks where an edit should start in the song: just before the drop, or the loudest stretch.
 """
 import argparse
 import subprocess
@@ -17,7 +19,9 @@ from .common import cache_dir, file_key, read_json, resolve, tc, write_json
 from .config import log
 
 SR, HOP, NFFT = 22050, 512, 2048
-CACHE_VERSION = 4
+CACHE_VERSION = 5
+ENERGY_STEP = 0.25
+PEAKS = 800
 
 
 def _load(src):
@@ -162,9 +166,46 @@ def analyse(src):
     for ratio, t in sorted(cands, reverse=True):
         if all(abs(t - d) > 6 for d in drops):
             drops.append(t)
+    # energy (for picking the strongest stretch) and peaks (for drawing the waveform)
+    k = max(1, int(round(ENERGY_STEP * fr)))
+    n = len(rms) // k
+    energy = rms[: n * k].reshape(n, k).mean(1) if n else rms[:1]
+    energy = np.clip(energy / (np.percentile(energy, 95) + 1e-9), 0, 1)
+    edges = np.linspace(0, len(x), PEAKS + 1).astype(int)
+    peaks = np.array([np.abs(x[a:b]).max() if b > a else 0.0 for a, b in zip(edges, edges[1:])])
+    peaks = np.clip(peaks / (np.percentile(peaks, 99) + 1e-9), 0, 1)
     r3 = lambda a: [round(float(v), 3) for v in a]
     return {"v": CACHE_VERSION, "engine": engine, "bpm": round(bpm, 1), "duration": round(dur, 2),
-            "beats": r3(beats), "downbeats": r3(downbeats), "drops": r3(sorted(drops))}
+            "beats": r3(beats), "downbeats": r3(downbeats), "drops": r3(sorted(drops)),
+            "energy_step": ENERGY_STEP, "energy": r3(energy), "peaks": r3(peaks)}
+
+
+def best_start(bt, length=None):
+    """Where an edit of `length` seconds should start in the song -> {"start", "reason", "drop", "length"}.
+
+    With a drop: a couple of bars before the drop that leads into the loudest stretch, so the edit gets the
+    build-up and the drop. Without one: the loudest `length` seconds, starting on a downbeat."""
+    dur = float(bt["duration"])
+    L = max(1.0, min(float(length or 30), dur))
+    e = np.asarray(bt.get("energy") or [], float)
+    step = float(bt.get("energy_step", ENERGY_STEP))
+
+    def loud(a, b):
+        i = int(a / step)
+        seg = e[i:max(i + 1, int(b / step))]
+        return float(seg.mean()) if len(seg) else 0.0
+
+    beats = bt["beats"] or [0.0]
+    period = 60 / bt["bpm"]
+    if bt["drops"]:
+        drop = max(bt["drops"], key=lambda t: loud(t, t + L))
+        i = min(range(len(beats)), key=lambda j: abs(beats[j] - drop))
+        lead = next((n for n in (8, 4, 2) if n * period <= 0.5 * L), 0)
+        return {"start": round(beats[max(0, i - lead)], 3), "reason": "drop", "drop": drop, "length": L}
+    downs = bt["downbeats"] or beats
+    fits = [t for t in downs if t + L <= dur + 0.05] or downs[:1]
+    start = max(fits, key=lambda t: (round(loud(t, t + L), 3), -t))
+    return {"start": round(start, 3), "reason": "loudest", "drop": None, "length": L}
 
 
 def beats_for(src, force=False):
@@ -181,6 +222,7 @@ def main():
     ap.add_argument("audio")
     ap.add_argument("--all", action="store_true")
     ap.add_argument("--force", action="store_true")
+    ap.add_argument("--length", type=float, default=30, help="edit length for the best-start pick (seconds)")
     a = ap.parse_args()
     d = beats_for(a.audio, a.force)
     bs = d["beats"]
@@ -189,6 +231,9 @@ def main():
     log("  beats:     " + "  ".join(tc(x, 2) for x in show) + ("" if a.all else "  ..."))
     log("  downbeats: " + "  ".join(tc(x, 2) for x in d["downbeats"][:10]) + "  ...")
     log("  drops:     " + ("  ".join(tc(x, 2) for x in d["drops"]) or "none found"))
+    b = best_start(d, a.length)
+    log(f"  best start for a {b['length']:.0f}s edit: {tc(b['start'], 2)}"
+        + (f" (just before the drop at {tc(b['drop'], 2)})" if b["drop"] is not None else " (the loudest stretch)"))
 
 
 if __name__ == "__main__":

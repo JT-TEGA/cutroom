@@ -22,7 +22,7 @@ from .media import AUDIO_EXT, describe_media, expand, is_audio, is_image
 from .models import BriefData, ClipRef
 
 PLACEHOLDER = re.compile(r"^\(.*\)$|^\[.*\]$")
-CHOICES = {"Reels / TikTok / both", "ORIGINAL / REFERENCE", "On / off", "yes / no / some parts",
+CHOICES = {"Reels / TikTok / both", "ORIGINAL / REFERENCE", "On / off", "yes / no", "yes / no / some parts",
            "yes / no / some parts / voiceover / mixed", "on / off / preset default"}
 SCRIPT_FIELD = re.compile(r"^\s*[-*]\s*(voiceover file|visual cues)\s*:\s*(.*)$", re.I)
 BEAT_PRESETS = {"photo-dump", "shoot-slideshow", "shoot-mashup", "transformation"}
@@ -107,6 +107,17 @@ def _val(fields, *keys):
     return None
 
 
+def _song_start(v):
+    """'0:42' / '42' / '1:02.5' -> seconds; 'auto' or anything else -> None (auto)."""
+    if not v or not re.fullmatch(r"\d+(?::\d{1,2})?(?:\.\d+)?", v.strip()):
+        return None
+    return parse_tc(v)
+
+
+def _yes(v):
+    return bool(v) and v.strip().lower().startswith(("yes", "on", "true"))
+
+
 def parse_markdown(text):
     """A briefs/*.md file -> BriefData (template hints and unanswered choices become empty)."""
     title, body, f = parse(text)
@@ -134,6 +145,8 @@ def parse_markdown(text):
         captions=_val(f, "captions"),
         caption_style=_val(f, "style"),
         track=_val(f, "track"),
+        music_start=_song_start(_val(f, "song starts at", "song start")),
+        music_in_app=_yes(_val(f, "add the song in instagram/tiktok when posting", "in-app sound")),
         music_vibe=_val(f, "vibe / volume"),
         beat_sync=_val(f, "beat sync"),
         sound_effects=_val(f, "sound effects"),
@@ -356,6 +369,15 @@ def analyse(brief, name, clips=None, auto_pick_music=False):
             have = ", ".join(x.name for x in music_files) or f"{music_rel}/ is empty"
             gaps.append(f"Music file not found: {track} ({have})")
     overrides.update(beat_rule(brief.beat_sync))
+    if brief.music_start is not None:
+        overrides["music_start"] = round(float(brief.music_start), 3)
+    if brief.music_in_app:
+        if music:
+            notes.append("posting with the in-app sound: the track sets the beat and the preview; each render also "
+                         "exports a copy without it, with the start time to pick in Instagram/TikTok")
+        elif preset not in BEAT_PRESETS:
+            notes.append("posting with the in-app sound but no track uploaded: upload the same song so the cuts land "
+                         "on its beat")
 
     cap = "" if blank(brief.captions) else (brief.captions or "").lower()
     if cap.startswith("off"):
@@ -373,7 +395,8 @@ def analyse(brief, name, clips=None, auto_pick_music=False):
         overrides["end_card"] = False
 
     return {"name": name, "title": brief.title, "preset": preset, "talk": talk, "voiceover": vo, "cues": cues,
-            "script": brief.script, "music": music, "target_length": target,
+            "script": brief.script, "music": music, "music_in_app": bool(brief.music_in_app and music),
+            "target_length": target,
             "style_overrides": overrides, "fields": brief.model_dump(mode="json", by_alias=True),
             "clips": clips, "labels": brief.labels, "gaps": gaps, "notes": notes,
             "mode": "REFERENCE" if is_ref else "ORIGINAL", "reference_url": url,
@@ -392,7 +415,9 @@ def show(out):
         + (f"  ref {out['reference_url']}" if out["mode"] == "REFERENCE" else ""))
     f = out["fields"]
     log(f"  length {out['target_length'] or '-'}s  platform {f.get('platform') or '-'}  "
-        f"music {out['music'] or f.get('track') or '-'}")
+        f"music {out['music'] or f.get('track') or '-'}"
+        + (f" from {f['music_start']}s" if f.get("music_start") is not None else "")
+        + (" (posting with the in-app sound)" if out.get("music_in_app") else ""))
     if out["style_overrides"]:
         log(f"  brief overrides preset: {out['style_overrides']}")
     log(f"  inputs: {n['clips']} clips, {n['photos']} photos" + (f", {n['voiceover']} voiceover" if n["voiceover"] else ""))

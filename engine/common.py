@@ -43,7 +43,7 @@ DEFAULTS = {
     "language": "en", "whisper_model": "large-v3-turbo", "vocab": [],
     "end_card": True, "end_card_seconds": 1.5, "end_card_text": "",
     "end_card_logo": "", "end_card_background": "blur",
-    "music_mode": "bed", "music_start": "auto", "music_under_voice_db": -14.0, "music_alone_lufs": -14.0,
+    "music_mode": "bed", "music_start": "best", "music_under_voice_db": -14.0, "music_alone_lufs": -14.0,
     "music_under_ambient_db": -6.0, "duck": True, "duck_db": 8.0,
     "ambient_share": 0.0, "ambient_lufs": -20.0, "ambient_duck_db": 7.0,
     "loudness_lufs": -14.0, "true_peak_db": -1.5,

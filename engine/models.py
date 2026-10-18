@@ -45,6 +45,11 @@ class BriefData(BaseModel):
     captions: str | None = Field(None, description="on / off")
     caption_style: str | None = None
     track: str | None = Field(None, description="music file name or 'none'")
+    music_start: float | None = Field(None, ge=0, description="seconds into the song where the edit starts; "
+                                                              "empty = auto (the strongest part / the drop)")
+    music_in_app: bool = Field(False, description="I'll add this song in Instagram/TikTok when posting: the track "
+                                                  "is only used for the beat and the preview, and each render also "
+                                                  "exports <name>_post.mp4 without it")
     music_vibe: str | None = None
     beat_sync: str | None = Field(None, description='"every beat" / "every 2 beats" / "on drops"')
     sound_effects: str | None = None

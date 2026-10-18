@@ -55,6 +55,17 @@ class ProjectFile(BaseModel):
     added_at: datetime = Field(default_factory=now)
 
 
+class InAppSound(BaseModel):
+    """Posting with the song added in Instagram/TikTok: what to pick there."""
+
+    song: str = Field(description="the uploaded track's file name")
+    start: float = Field(description="where to start the song in the app (seconds, a whole second)")
+    start_label: str = Field(description='the same as the app shows it, e.g. "0:42"')
+    voice: bool = Field(description="the post file has talking or a voiceover: turn the in-app song down under it")
+    song_duration: float | None = None
+    warning: str | None = Field(None, description="e.g. the song ends before the video")
+
+
 class RenderInfo(BaseModel):
     version: int
     video: str
@@ -64,6 +75,8 @@ class RenderInfo(BaseModel):
     draft: bool = False
     plan_version: int | None = None
     audio: dict[str, Any] = Field(default_factory=dict)
+    post_video: str | None = Field(None, description="the copy without the music, to post with the in-app sound")
+    in_app: InAppSound | None = None
     created_at: datetime = Field(default_factory=now)
 
 

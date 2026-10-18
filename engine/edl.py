@@ -493,7 +493,19 @@ def _layout(segs, cfg, grid, edl):
 
 
 def music_grid(edl, cfg, segs):
+    """The beat grid in output time. "in_app": posting with the song added in Instagram/TikTok, which plays it from
+    the video's first frame and lets you pick the start to the second: the start is moved to match."""
     m = edl.get("music") or {}
+    grid = _music_grid(edl, cfg, segs, m)
+    if grid and m.get("in_app"):
+        start = float(round(max(0.0, grid["start"] - grid["at"])))
+        if grid["at"] or abs(start - grid["start"]) > 1e-3:
+            from .beats import beats_for
+            grid = _grid_from(beats_for(m["src"]), start, 0.0)
+    return grid
+
+
+def _music_grid(edl, cfg, segs, m):
     if not m.get("src"):
         return None
     from .beats import beats_for  # librosa only when there is music
@@ -504,6 +516,9 @@ def music_grid(edl, cfg, segs):
     if isinstance(start, (int, float)):
         return _grid_from(bt, float(start), at)
     start = str(start)
+    if start == "best":
+        from .beats import best_start
+        return _grid_from(bt, best_start(bt, edl.get("target_length") or cfg["target_length"])["start"], at)
     if start == "auto":
         return _grid_from(bt, downs[0], at)
     if start.startswith("drop"):
@@ -526,7 +541,7 @@ def music_grid(edl, cfg, segs):
             return _grid_from(bt, 0.0, at + T - drops[0])   # not enough music before the drop: delay it
         n = int(start.split("-", 1)[1]) if "-" in start else 16
         return _grid_from(bt, beats[max(0, di - n)], at)
-    die(f"music start {start!r} not understood (number, auto, drop, drop-16)", code="invalid_plan", status=422)
+    die(f"music start {start!r} not understood (number, best, auto, drop, drop-16)", code="invalid_plan", status=422)
 
 
 def build_timeline(edl, cfg=None):

@@ -69,6 +69,9 @@ def analysis_text(a: dict[str, Any]) -> str:
              f"music: {a.get('music') or 'none'}", f"voiceover: {vo}",
              f"target length: {a.get('target_length') or 'preset default'}s",
              f"brief overrides: {json.dumps(a.get('style_overrides') or {})}"]
+    if a.get("music_in_app"):
+        lines.append("posting with the in-app sound: the creator adds this song in Instagram/TikTok, so the track only "
+                     "sets the beat; keep music.start and music.in_app as they are")
     if cues:
         lines.append("visual cues:\n" + cues)
     if a.get("gaps"):

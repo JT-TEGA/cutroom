@@ -206,15 +206,18 @@ class BRoll(_Model):
 
 class Music(_Model):
     src: str
-    start: float | str | None = Field(None, description='seconds, "auto", "drop" or "drop-16"')
+    start: float | str | None = Field(None, description='seconds into the song, "best" (the strongest part), '
+                                                       '"auto" (first downbeat), "drop" or "drop-16"')
     level_db: float | None = None
     snap_cuts: bool | None = None
+    in_app: bool | None = Field(None, description="posted with the song added in Instagram/TikTok: the render "
+                                                  "also exports a copy without it, and the start is a whole second")
 
     @field_validator("start")
     @classmethod
     def _start(cls, v: float | str | None) -> float | str | None:
-        if isinstance(v, str) and not re.fullmatch(r"auto|drop(-\d+)?", v):
-            raise ValueError(f'music start {v!r} not understood (seconds, "auto", "drop", "drop-16")')
+        if isinstance(v, str) and not re.fullmatch(r"best|auto|drop(-\d+)?", v):
+            raise ValueError(f'music start {v!r} not understood (seconds, "best", "auto", "drop", "drop-16")')
         return v
 
 
@@ -419,7 +422,7 @@ def view(tl: Timeline) -> TimelineView:
     music = None
     if grid:
         music = {"src": edl["music"]["src"], "bpm": grid["bpm"], "starts_at": round(grid["start"], 3),
-                 "drops": [d for d in grid["drops"] if d <= total]}
+                 "drops": [d for d in grid["drops"] if d <= total], "in_app": bool(edl["music"].get("in_app"))}
     ec_item = next((i for i in items if i["kind"] == "endcard"), None)
     end_card = None
     if ec_item:

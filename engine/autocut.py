@@ -548,6 +548,8 @@ def draft(name, clips, preset=None, talk=None, vo=None, music=None, length=None,
         for s in loud[: max(1, int(round(len(moment_segs) * share)))]:
             s["ambient"] = True
     edl_music = {"src": music, "start": cfg["music_start"]} if music else None
+    if edl_music and brief.get("music_in_app"):
+        edl_music["in_app"] = True
     visual = [s for s in segs if not s.get("talk") and not is_vo(s)]
     if preset == "transformation" and len(visual) >= 2:
         before, after = visual[0], visual[-1]
@@ -556,7 +558,7 @@ def draft(name, clips, preset=None, talk=None, vo=None, music=None, length=None,
         before["label"] = "before"
         segs.append({"type": "compare", "a": side(before), "b": side(after), "mode": cfg["compare_mode"],
                      "labels": ["Before", "After"], "beats": 8, "on_drop": True, "label": "reveal"})
-        if edl_music:
+        if edl_music and not isinstance(cfg["music_start"], (int, float)):     # a start the creator picked wins
             edl_music["start"] = "drop"
 
     for s in segs:

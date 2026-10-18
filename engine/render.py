@@ -632,7 +632,11 @@ def voiceover_bus(items, cfg, n):
     return bus, {"blocks": len(blocks), "cleaned": all(cleaned), "lufs_in": lv}
 
 
-def mix_audio(edl, items, cfg, seg_wavs, roles, wd, total_frames):
+def mix_audio(edl, items, cfg, seg_wavs, roles, wd, total_frames, post=False):
+    """The final mix -> (audio_final.wav, notes, audio_post.wav or None).
+
+    post: also master a mix without the music (original sounds, voice and SFX) for posting with the song added in
+    Instagram/TikTok; it is levelled on its own, so the voice sits where it would in any other render."""
     fps = cfg["fps"]
     n = int(round(total_frames / fps * SR))
     voice = np.zeros((n, 2), np.float32)
@@ -661,6 +665,7 @@ def mix_audio(edl, items, cfg, seg_wavs, roles, wd, total_frames):
             amb *= np.power(10.0, -float(cfg["duck_db"]) * _ctrl(E.speech_spans(vo_words), n, 0.0) / 20)[:, None]
         iv = lufs(voice)
     mix = voice + amb
+    bed_bus = np.zeros_like(mix)
     notes = {"voice_lufs": iv, "ambient_lufs": ia, "voiceover": vo_notes}
 
     m = edl.get("music")
@@ -695,7 +700,7 @@ def mix_audio(edl, items, cfg, seg_wavs, roles, wd, total_frames):
         if fo > 0:
             k = min(len(env), int(fo * SR))
             env[-k:] *= np.linspace(1, 0, k)
-        mix[a:a + len(bed)] += bed * env[:, None]
+        bed_bus[a:a + len(bed)] += bed * env[:, None]
         notes.update(music_lufs=im, music_target=round(target, 1), ducked=bool(duck and iv is not None))
 
     sfx = list(edl.get("sfx", []))
@@ -713,11 +718,17 @@ def mix_audio(edl, items, cfg, seg_wavs, roles, wd, total_frames):
             mix[a:b] += x[: b - a]
     notes["sfx"] = len(sfx)
 
-    raw = wd / "mix.f32"
-    raw.write_bytes(mix.astype(np.float32).tobytes())
+    out = master(mix + bed_bus, wd / "audio_final.wav", cfg)
+    post_out = master(mix, wd / "audio_post.wav", cfg) if post else None
+    return out, notes, post_out
+
+
+def master(x, out, cfg):
+    """Loudness-normalise a mix (two-pass loudnorm) -> 16-bit WAV at out. Silence stays silence."""
+    raw = out.with_suffix(".f32")
+    raw.write_bytes(x.astype(np.float32).tobytes())
     I, TP = cfg["loudness_lufs"], cfg["true_peak_db"]
     base = ["-f", "f32le", "-ar", str(SR), "-ac", "2", "-i", raw]
-    out = wd / "audio_final.wav"
     r = run(["ffmpeg", "-hide_banner"] + base + ["-af", f"loudnorm=I={I}:TP={TP}:LRA=11:print_format=json",
                                                  "-f", "null", "-"])
     mm = re.search(r"\{[^{}]*\"input_i\"[^{}]*\}", r.stderr)
@@ -729,7 +740,7 @@ def mix_audio(edl, items, cfg, seg_wavs, roles, wd, total_frames):
     else:   # silent video
         run(FF + base + ["-c:a", "pcm_s16le", out])
     raw.unlink()
-    return out, notes
+    return out
 
 
 # ------------------------------------------------------------------ export
@@ -794,6 +805,39 @@ def export(out, wd, seg_mp4s, overlay_dir, broll, graphics, audio, cfg, total_fr
     return out
 
 
+def export_post(video, audio, out, cfg):
+    """The same picture with another sound: the video stream is copied, so this takes a second."""
+    run(FF + ["-i", video, "-i", audio, "-map", "0:v", "-map", "1:a", "-c:v", "copy", "-c:a", "aac",
+              "-b:a", str(cfg["audio_bitrate"]), "-ar", str(SR), "-movflags", "+faststart", "-shortest", out])
+    return out
+
+
+def post_path(video):
+    """output/v2/name_v2.mp4 -> output/v2/name_v2_post.mp4 (the file to post with the in-app sound)."""
+    return video.with_name(f"{video.stem}_post{video.suffix}")
+
+
+def in_app_card(edl, grid, duration, voice):
+    """What to tell the creator when they post with the in-app sound: which song, where to start it, and whether
+    their voice is in the file (then the app's music should go down under it)."""
+    from .beats import beats_for
+    src = edl["music"]["src"]
+    start = grid["start"]
+    song = float(beats_for(src)["duration"])
+    card = {"song": os.path.basename(src), "start": start, "start_label": tc_whole(start), "voice": bool(voice),
+            "song_duration": song, "warning": None}
+    if start + duration > song + 0.5:
+        card["warning"] = (f"The song ends {tc_whole(song)} in, before the video does: pick an earlier start so the "
+                           f"in-app song lasts the whole video.")
+    return card
+
+
+def tc_whole(t):
+    """42.0 -> "0:42", 75 -> "1:15" (how Instagram and TikTok show a song position)."""
+    t = int(round(t))
+    return f"{t // 60}:{t % 60:02d}"
+
+
 def targets(name, wd):
     """Where this render goes -> (video, contact sheet, version or None).
 
@@ -813,6 +857,8 @@ def targets(name, wd):
         vd.mkdir(exist_ok=True)
         n = len(list(vd.glob(f"{name}_v*.mp4"))) + 1
         shutil.move(out, vd / f"{name}_v{n}.mp4")
+        if post_path(out).exists():
+            shutil.move(post_path(out), vd / f"{name}_v{n}_post.mp4")
         sheet = lay.output / f"{name}_contact.jpg"
         if sheet.exists():
             shutil.move(sheet, vd / f"{name}_v{n}_contact.jpg")
@@ -821,14 +867,20 @@ def targets(name, wd):
 
 # ------------------------------------------------------------------ main
 
-def render(name, draft=False, sheet=True):
-    """Render work/<name>/edl.json (or the project's plan) -> dict with the output paths, duration and audio notes."""
+def render(name, draft=False, sheet=True, music=None):
+    """Render work/<name>/edl.json (or the project's plan) -> dict with the output paths, duration and audio notes.
+
+    music: settings that win over the plan's music block, e.g. {"start": 42.0, "in_app": True} (the app passes the
+    creator's choices from the Music step). With "in_app" the render also writes <name>_post.mp4 without the music."""
     need("ffmpeg")
     need("node")
     t_start = time.time()
     step("prepare", 1)
     wd = work_dir(name)
     edl = E.load(name)
+    if music and edl.get("music"):
+        edl["music"] = {**edl["music"], **music}
+    in_app = bool((edl.get("music") or {}).get("in_app") and (edl.get("music") or {}).get("src"))
     problems = E.validate(edl)
     if problems:
         die("edit plan has problems:\n  - " + "\n  - ".join(problems), code="invalid_plan", status=422)
@@ -922,13 +974,17 @@ def render(name, draft=False, sheet=True):
 
     # 3. audio
     step("audio", 80)
-    audio, anotes = mix_audio(edl, items, cfg, seg_wavs, roles, wd, total_frames)
+    audio, anotes, post_audio = mix_audio(edl, items, cfg, seg_wavs, roles, wd, total_frames, post=in_app)
 
     # 4. export
     step("export", 88)
     out, sheet_path, version = targets(name, wd)
+    post_out = post_path(out) if post_audio else None
     try:
         export(out, wd, seg_mp4s, overlay_dir, broll, graphics, audio, cfg, total_frames, draft)
+        if post_out:
+            step("export: copy without the music", 95)
+            export_post(out, post_audio, post_out, cfg)
     except BaseException:
         if version is not None:
             shutil.rmtree(out.parent, ignore_errors=True)
@@ -951,6 +1007,9 @@ def render(name, draft=False, sheet=True):
                      | {"role": r, "ramp": bool(it["ramp"]), "voiceover": it["vo"]["src"] if it.get("vo") else None}
                      for it, r in zip(items, roles)],
         "caption_pages": len(spec["captions"]), "texts": len(spec["texts"]),
+        "post_video": rel(post_out) if post_out else None,
+        "in_app": in_app_card(edl, grid, info["duration"], anotes.get("voice_lufs") is not None)
+        if post_out and grid else None,
     }
     write_json(wd / "render.json", result)
     if version is not None:
@@ -960,6 +1019,12 @@ def render(name, draft=False, sheet=True):
     log(f"\ndone in {time.time() - t_start:.0f}s -> {rel(out)}  ({info['duration']:.2f}s, {mb:.1f} MB)")
     if sheet_out:
         log(f"contact sheet -> {rel(sheet_out)}")
+    if result["in_app"]:
+        card = result["in_app"]
+        log(f"to post -> {rel(post_out)} (no music): in Instagram/TikTok pick {card['song']} and start it at "
+            f"{card['start_label']}" + (", turn the song down under your voice" if card["voice"] else ""))
+        if card["warning"]:
+            log(f"  ! {card['warning']}")
     lv = anotes.get("voice_lufs")
     vn = anotes.get("voiceover")
     log(f"audio: voice {'%.1f LUFS' % lv if lv else 'none'}"

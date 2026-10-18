@@ -27,6 +27,8 @@
 - Style: (or "brand default")
 ## Music & sound
 - Track: (file in music/ or "none")
+- Song starts at: (auto = the strongest part / the drop, or a time in the song like 0:42)
+- Add the song in Instagram/TikTok when posting: yes / no
 - Vibe / volume: (e.g. hard Afrobeats, low under voice)
 - Beat sync: (e.g. "cut on every beat" / "every 2 beats" / "on drops" / "preset default")
 - Sound effects: (whooshes, bass hits on cuts...)
