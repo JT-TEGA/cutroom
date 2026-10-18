@@ -122,7 +122,7 @@ def analyse(store: ProjectStore, pid: str, brain: Brain) -> AnalyseResult:
         step("ask the brain", 30)
         res = brain_brief.analyse(brain, proj.brief, a, _file_info(proj), cwd=cwd, questions=proj.questions,
                                   answers=proj.answers, presets=list_presets())
-        res.assumptions = list(dict.fromkeys(a["notes"] + res.assumptions))
+        res.assumptions = res.assumptions or a["notes"]      # the brain saw the notes and restates what still holds
     with store.edit(pid) as p:
         p.questions, p.assumptions = res.questions, res.assumptions
         if p.status in ("new", "error"):
