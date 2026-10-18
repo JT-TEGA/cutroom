@@ -22,7 +22,7 @@ Settings resolve in layers: `brand.md` < `presets/<content type>.md` < the brief
 | `ve moments <clip>` | NO-TALK scoring: best windows by sharpness / steadiness / exposure / action / faces |
 | `ve beats <audio>` | BPM, beats, downbeats, drops (librosa; kick-aligned) |
 | `ve plan <name> [--cuts]` | timeline preview of `work/<name>/edl.json`; `--cuts` = what was removed and why |
-| `ve render <name> [--draft]` | export `output/<name>.mp4` + `output/<name>_contact.jpg` (old versions → `work/<name>/versions/`) |
+| `ve render <name> [--draft]` | export `output/<name>.mp4` + `output/<name>_contact.jpg` (old versions → `work/<name>/versions/`); with the in-app sound also `output/<name>_post.mp4` (no music) |
 | `ve sheet <video> [--times ...]` | contact sheet at chosen moments |
 | `ve faces <clip> [--preview]` | check face tracking |
 | `ve sfx` / `ve doctor` | starter SFX kit / check all tools |
@@ -34,7 +34,7 @@ and a ```settings block the scripts read. Keys a preset (or brief) can set inclu
 `target_length, talk_default, shot_min, shot_max, beat_every (0|1|2|4|auto), beat_every_after_drop,
 hold_last_beats, one_per_clip, shake_ok, captions (talking|off), caption_*, title_font, title_case,
 voice_clean (voiceover|all|off), voice_denoise_db, voice_deess, voice_comp_ratio, voice_highpass, vo_shot_min, vo_shot_max,
-text_style, music_mode (bed|lead|mix), music_start (auto|drop|drop-16|seconds), music_under_voice_db,
+text_style, music_mode (bed|lead|mix), music_start (best|auto|drop|drop-16|seconds), music_under_voice_db,
 ambient_share, ambient_lufs, transition, transition_location, transition_downbeat, transition_drop,
 ramp_on_drop, compare_mode (swipe|split), grade, grain, vignette, handheld, kenburns, kb_moves,
 photo_fit (auto|crop|blur), card_min_seconds, end_card, end_card_seconds`.
@@ -103,7 +103,7 @@ near-misses in the transcript.
     {"text": "Week 1", "style": "label", "x": 0.25},
     {"text": "Incline bench", "sub": "4 × 10", "style": "lower3", "cue": "four sets", "dur": 2}  // when it's said
   ],
-  "music": {"src": "music/track.mp3", "start": "drop", "level_db": -14, "snap_cuts": true},
+  "music": {"src": "music/track.mp3", "start": "drop", "level_db": -14, "snap_cuts": true},   // "in_app": true = post with the app's song
   "broll": [{"src": "raw/shake.mp4", "in": 1.0, "cue": "protein shake", "dur": 2}],   // cutaway over to-camera talking
   "graphics": [], "flash": [], "sfx": [], "sfx_on_cuts": null,
   "captions": {"enabled": true, "replace": {"6 .30": "6:30"}, "hide": []},
@@ -123,8 +123,14 @@ Text stays up at least 1.2 s (cards/macros/credits 2.5 s) unless `dur`/`end` is 
 (slow-mo into normal), `out`, `slow-normal-slow`, `normal-slow-normal`, or `[[fraction, speed], ...]`.
 Slow-mo uses real frames from 60/120 fps clips and blends frames when the clip doesn't have enough.
 **Grades:** `none`, `warm`, `clean-editorial`, `punchy`, `film`, `custom:<ffmpeg filters>`, or a `.cube` LUT path.
-**Music start:** seconds, `auto` (first downbeat), `drop` (the first drop lands where the `on_drop` shot starts),
-`drop-16` (start 16 beats before the drop).
+**Music start:** seconds into the song, `best` (the default: two bars before the drop that leads into the loudest
+stretch, or without a drop the loudest stretch of the target length, on a downbeat), `auto` (first downbeat),
+`drop` (the first drop lands where the `on_drop` shot starts), `drop-16` (start 16 beats before the drop). In a brief:
+`- Song starts at: 0:42` under Music & sound (empty = best).
+**Posting with the in-app sound** (`- Add the song in Instagram/TikTok when posting: yes`, or `"in_app": true` in the
+plan's music): the track only sets the beat and the preview. The song starts at the first frame from a whole second
+(how Instagram/TikTok let you pick it), and the render also writes `<name>_post.mp4`: the same picture with the
+original sound, voice and SFX but no music, levelled on its own. The log says which second to start the song at.
 
 **Sound per shot** (`seg_role`): talking → voice (levelled to -16 LUFS, captions, music ducks under it);
 `ambient: true` or music_mode `mix` → real sound at `ambient_lufs` (music dips under ambient snippets in

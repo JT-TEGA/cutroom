@@ -117,6 +117,10 @@ http://127.0.0.1:8000/docs).
 | **Projects**: every video with its status (draft, planning, needs review, rendering, done), live progress, search and a filter by content type | **New video, step 1**: the content type, grouped Lifestyle / Fashion / Gym |
 | ![Media](docs/screenshots/03-media.jpg) | ![The idea](docs/screenshots/04-idea.jpg) |
 | **Step 2, media**: drop clips and photos, a voice memo and a track; drag to reorder, click a name to rename it | **Step 3, the idea**: the brief as a form that autosaves; the preset's defaults are the placeholders, advanced fields fold away |
+| ![The song](docs/screenshots/03b-music.jpg) | ![Import from Photos](docs/screenshots/03c-photos.jpg) |
+| **The song**: the waveform with the part the edit uses lit up (auto: just before the drop, or the strongest stretch), drag or slide to pick your own start, play from there; "I'll add this song in Instagram/TikTok when posting" | **Import from Photos**: albums, recents, favourites and videos from the Mac Photos app, multi-select across albums, a date filter, Live Photos as still or video, iCloud-only items downloaded on import |
+| ![Photos access](docs/screenshots/03d-photos-access.jpg) | ![Post with the in-app sound](docs/screenshots/21-result-in-app.jpg) |
+| **No access yet?** The exact System Settings steps for the app Cutroom runs from, and Check again | **Post with the in-app sound**: the song and the second to start it at, the file to post (no music) and the preview with music; a reminder to turn the song down when you talk |
 | ![Review](docs/screenshots/05-review.jpg) | ![Claude reading the brief](docs/screenshots/06-claude-reading.jpg) |
 | **Step 4, review**: checks and what happens next | **Claude reads the brief** (live over the job WebSocket) |
 | ![Questions](docs/screenshots/07-questions.jpg) | ![Planning progress](docs/screenshots/08-plan-progress.jpg) |
@@ -137,6 +141,39 @@ http://127.0.0.1:8000/docs).
 The screenshots come from a real end-to-end run against `./cutroom --demo`: synthetic footage, a `say` voice memo
 and a generated beat track went through the wizard, the pipeline (transcription, voice clean-up, beat detection,
 rendering) and the scripted brain. See [Development](#development) to regenerate them.
+
+### Posting with the in-app sound
+
+Reels and TikToks get more reach with the platform's own copy of a song, so you can add the song in the app instead of
+baking it in. Turn on **"I'll add this song in Instagram/TikTok when posting"** in the Music step (or the brief).
+Upload the same song anyway: Cutroom cuts to its beat and uses it for the preview, and every render then gives you two
+files: `<name>_vN.mp4` with the music (to check) and `<name>_vN_post.mp4` with your clips' own sound, your voice and
+any sound effects but no music (to post). The Result screen says which song to pick and where to start it, e.g.
+**0:42**: the start is always a whole second because that's what the apps let you pick, and the song plays from the
+first frame. If you talk in the video, it reminds you to turn the song down in the app (about 20%).
+
+Which part of the song the edit uses is yours to choose in the Music step: click or drag on the waveform, or use the
+slider, and play from there. Left on **Auto** it starts two bars before the drop that leads into the loudest part (or,
+without a drop, the loudest stretch as long as the video).
+
+### Import from Photos
+
+**Import from Photos** in the Media step opens your Mac's Photos library (read with
+[osxphotos](https://github.com/RhetTbull/osxphotos), installed by `scripts/setup.sh`): albums with counts and covers,
+recents, favourites, videos, a date filter and multi-select. Importing copies the **originals** into the project
+(HEIC is converted when it's used, as with any upload; Live Photos come in as the still unless you pick the video
+part; RAW becomes JPEG). Items that are only in iCloud are downloaded through the Photos app first. Nothing in your
+library is ever changed. Dragging photos and videos straight out of the Photos app onto the drop zone works too.
+
+macOS keeps the Photos library private, so the app you start Cutroom from needs access once:
+
+1. **System Settings → Privacy & Security → Full Disk Access**: turn on the app you run `./cutroom` from
+   (Terminal, iTerm or Visual Studio Code; add it with **+** if it isn't listed).
+2. Quit that app completely (⌘Q), open it again and run `./cutroom` again.
+3. For photos that are only in iCloud: the first import asks to let that app control Photos. Click **OK** (it's under
+   Privacy & Security → Automation if you need it later).
+
+Until then the picker shows these steps (naming the right app) and a **Check again** button; it never errors out.
 
 ## From the terminal
 
@@ -171,12 +208,15 @@ curl -s -X POST "$API/projects/$ID/revise?wait=true" -H 'content-type: applicati
 | `POST /projects/{id}/analyse` · `plan` · `render` · `revise` · `reference` | background jobs |
 | `GET/PUT /projects/{id}/timeline` | the plan, resolved to output times (each shot knows its segment); save your own edits |
 | `GET /projects/{id}/voiceover`, `POST /projects/{id}/reveal` | voice preview + clean-up numbers; show a render in Finder |
+| `GET /projects/{id}/music` | the song: waveform, BPM, drops, the auto start and your pick (`PATCH` the brief's `music_start` / `music_in_app`) |
+| `GET /photos/status` · `POST /photos/refresh` · `GET /photos/albums` · `GET /photos/items` · `GET /photos/thumbnail/{id}` | the Mac Photos library (status says what to do without access) |
+| `POST /projects/{id}/photos/import` | a job: copy originals from Photos into the project, with what was skipped and why |
 | `GET /jobs/{id}`, `WS /ws/jobs/{id}` | status, step, % done, log lines, result |
 | `POST /jobs/{id}/retry` | run a failed, cancelled or interrupted job again with the same inputs |
 
 Job records are saved in each project's `work/jobs.json`, so they survive a server restart. A job that was queued
 or running when the server stopped comes back as `interrupted`, ready to retry.
-| `GET /projects/{id}/outputs`, `…/outputs/{v}/video` | versions; video streams with HTTP Range (`?download=true` to save) |
+| `GET /projects/{id}/outputs`, `…/outputs/{v}/video`, `…/outputs/{v}/post` | versions; video streams with HTTP Range (`?download=true` to save); `post` is the copy without music |
 | `GET /media/thumbnail?path=&t=`, `GET /media/file?path=` | thumbnails (at a time); any workspace file, range-enabled |
 | `GET /presets`, `PUT /presets/{name}`, `GET/PUT /settings`, `GET /system/status`, `GET /fonts/{file}` | configuration |
 
@@ -202,6 +242,7 @@ engine/            the pipeline as a package
   pipeline.py      the editing workflow for app projects
   project.py       projects in workspace/<id>/
   timeline.py      the edit plan as Pydantic models + resolved view
+  photos.py        the Mac Photos library (osxphotos): albums, items, thumbnails, importing originals
   config.py        configurable paths, per-job layout, progress reporting
   render.py …      framing, overlay, audio mix, export (carried over from the chat era)
 server/            FastAPI app, routes, background job queue
@@ -222,7 +263,7 @@ Paths to shared resources can be moved with `CUTROOM_ROOT`, `CUTROOM_WORKSPACE`,
 ## Development
 
 ```bash
-.venv/bin/python -m pytest        # 72 tests, ~20 s; never calls Claude (the brain is mocked)
+.venv/bin/python -m pytest        # 101 tests, ~25 s; never calls Claude (the brain is mocked) or reads your Photos library
 .venv/bin/ruff check .
 cd app && npm run lint            # the app's lint (also runs in npm run build); npm run gen:api regenerates its typed client
 ```
@@ -241,8 +282,13 @@ The app is checked end to end in a real browser (headless Chrome via Puppeteer) 
 .venv/bin/python scripts/demo_media.py             # synthetic clips, photos, a voice memo, a track -> .demo/media
 ./cutroom --demo --no-open &
 node app/scripts/walkthrough.mjs                   # every screen, start to finish -> docs/screenshots/*.jpg
-node app/scripts/check-interactions.mjs            # drag to reorder, swap from the bin, delete + undo, edit a label
+node app/scripts/check-interactions.mjs            # drag to reorder, swap from the bin, delete + undo, edit a label,
+                                                   # drops the way the Photos app hands files over
 ```
+
+In demo mode, Import from Photos reads a stand-in library made from `.demo/media` (its folders are the albums, two
+items act as iCloud-only), so no run ever touches your own library. `CUTROOM_PHOTOS=denied ./cutroom --demo` shows
+the no-access screen (`node app/scripts/walkthrough.mjs --photos-denied` takes its screenshot).
 
 Both leave every screen and come back (client-side, so screens really unmount), including mid-planning and
 mid-render; the walkthrough then sweeps every route and the error screen (`--sweep-only` runs just that). Any page
