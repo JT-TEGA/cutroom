@@ -7,11 +7,11 @@ export function TypeBadge({ type, className }: { type: string | null | undefined
   return (
     <span
       className={cn(
-        "inline-flex h-6 items-center gap-1.5 rounded-md border border-white/[0.07] bg-white/[0.04] px-2 text-[11.5px] font-medium text-zinc-300",
+        "inline-flex h-6 items-center gap-1.5 rounded-full bg-surface-2 px-2.5 text-[11.5px] font-medium text-foreground",
         className,
       )}
     >
-      <Icon className="size-3 text-primary" />
+      <Icon className="size-3 text-ink-soft" />
       {m.title}
     </span>
   )

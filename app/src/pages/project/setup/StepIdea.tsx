@@ -34,7 +34,7 @@ function Field({ label, hint, children, className }: { label: string; hint?: Rea
   return (
     <div className={className}>
       <div className="mb-1.5 flex items-baseline justify-between gap-3">
-        <label className="text-[12.5px] font-medium text-zinc-300">{label}</label>
+        <label className="text-[12.5px] font-medium text-foreground">{label}</label>
         {hint && <span className="truncate text-[11.5px] text-subtle">{hint}</span>}
       </div>
       {children}
@@ -51,8 +51,8 @@ function Chips({ value, onChange, options, preset }: { value: string; onChange: 
           type="button"
           onClick={() => onChange("")}
           className={cn(
-            "h-8 rounded-lg border px-3 text-[12.5px] font-medium transition",
-            !value ? "border-primary/60 bg-primary/12 text-violet-100" : "border-white/[0.07] text-muted-foreground hover:text-foreground",
+            "h-8 rounded-full border px-3.5 text-[12.5px] font-medium transition",
+            !value ? "border-transparent bg-accent text-accent-ink" : "border-ink/15 text-ink-soft hover:border-ink/30 hover:text-foreground",
           )}
         >
           Preset{preset ? `: ${preset}` : " default"}
@@ -64,10 +64,10 @@ function Chips({ value, onChange, options, preset }: { value: string; onChange: 
           key={o.value}
           onClick={() => onChange(o.value === value ? "" : o.value)}
           className={cn(
-            "inline-flex h-8 items-center gap-1.5 rounded-lg border px-3 text-[12.5px] font-medium transition",
+            "inline-flex h-8 items-center gap-1.5 rounded-full border px-3.5 text-[12.5px] font-medium transition",
             value === o.value
-              ? "border-primary/60 bg-primary/12 text-violet-100"
-              : "border-white/[0.07] bg-white/[0.02] text-muted-foreground hover:border-white/15 hover:text-foreground",
+              ? "border-transparent bg-accent text-accent-ink"
+              : "border-ink/15 bg-surface text-ink-soft hover:border-ink/30 hover:text-foreground",
           )}
         >
           {o.icon && <o.icon className="size-3.5" />}
@@ -95,15 +95,17 @@ function Section({
   return (
     <div className="panel overflow-hidden">
       <button type="button" onClick={() => setOpen((o) => !o)} className="flex w-full items-center gap-3 px-5 py-4 text-left">
-        <Icon className="size-4 text-primary" />
+        <span className="grid size-8 place-items-center rounded-full bg-surface-2 text-foreground">
+          <Icon className="size-4" />
+        </span>
         <span className="flex-1 text-[14px] font-semibold">{title}</span>
-        {!!filled && <span className="rounded-full bg-white/[0.06] px-2 py-0.5 text-[11px] text-muted-foreground">{filled} set</span>}
+        {!!filled && <span className="rounded-full bg-accent px-2 py-0.5 text-[11px] font-medium text-accent-ink">{filled} set</span>}
         <ChevronDown className={cn("size-4 text-muted-foreground transition-transform", open && "rotate-180")} />
       </button>
       <AnimatePresence initial={false}>
         {open && (
           <motion.div initial={{ height: 0 }} animate={{ height: "auto" }} exit={{ height: 0 }} transition={{ duration: 0.22 }} className="overflow-hidden">
-            <div className="grid gap-5 border-t border-white/[0.05] px-5 pt-4 pb-5">{children}</div>
+            <div className="grid gap-5 border-t border-border px-5 pt-4 pb-5">{children}</div>
           </motion.div>
         )}
       </AnimatePresence>
@@ -111,7 +113,7 @@ function Section({
   )
 }
 
-const inputCls = "bg-white/[0.025] border-white/[0.08] placeholder:text-subtle"
+const inputCls = "placeholder:text-subtle"
 
 export function StepIdea({ project }: { project: Project }) {
   const patch = usePatchProject(project.id)
@@ -269,7 +271,7 @@ export function StepIdea({ project }: { project: Project }) {
               <Input {...text("sound_effects", true)} placeholder="whooshes, bass hits on cuts…" className={inputCls} />
             </Field>
           </div>
-          <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-white/[0.07] px-4 py-3 transition hover:border-white/15">
+          <label className="flex cursor-pointer items-start gap-3 rounded-2xl bg-surface-2/60 px-4 py-3 transition hover:bg-surface-2">
             <Smartphone className="mt-0.5 size-4 shrink-0 text-primary" />
             <span className="min-w-0 flex-1">
               <span className="block text-[13px] font-medium">I'll add this song in Instagram/TikTok when posting</span>
@@ -311,7 +313,7 @@ export function StepIdea({ project }: { project: Project }) {
       <aside className="flex flex-col gap-4 max-lg:hidden">
         <div className="panel sticky top-20 p-5">
           <div className="mb-3 flex items-center gap-2.5">
-            <span className="grid size-8 place-items-center rounded-lg bg-primary/15 text-primary">
+            <span className="grid size-8 place-items-center rounded-full bg-accent text-accent-ink">
               <meta.icon className="size-4" />
             </span>
             <div>
@@ -333,11 +335,11 @@ export function StepIdea({ project }: { project: Project }) {
               .map(([k, v]) => (
                 <div key={k}>
                   <dt className="text-subtle">{k}</dt>
-                  <dd className="mt-0.5 leading-snug text-zinc-300">{v}</dd>
+                  <dd className="mt-0.5 leading-snug text-foreground">{v}</dd>
                 </div>
               ))}
           </dl>
-          <p className="mt-4 border-t border-white/[0.05] pt-3 text-[11.5px] leading-relaxed text-subtle">
+          <p className="mt-4 border-t border-border pt-3 text-[11.5px] leading-relaxed text-subtle">
             Your brief wins over the preset, and the preset over your brand settings.
           </p>
         </div>

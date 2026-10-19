@@ -36,7 +36,7 @@ function CardMenu({ onDelete }: { onDelete: () => void }) {
       <DropdownMenuTrigger asChild>
         <button
           aria-label="Project actions"
-          className="absolute top-3 right-3 z-10 grid size-7 place-items-center rounded-md bg-black/55 text-zinc-200 opacity-0 backdrop-blur-md transition group-hover/card:opacity-100 hover:bg-black/80 data-[state=open]:opacity-100"
+          className="absolute top-4 right-4 z-10 grid size-7 place-items-center rounded-full bg-surface/90 text-foreground opacity-0 shadow-soft backdrop-blur-md transition group-hover/card:opacity-100 hover:bg-surface data-[state=open]:opacity-100"
         >
           <MoreHorizontal className="size-4" />
         </button>
@@ -54,10 +54,10 @@ function NewTile() {
   return (
     <Link
       to="/new"
-      className="group relative flex aspect-[4/5] flex-col items-center justify-center overflow-hidden rounded-2xl border border-dashed border-white/[0.1] bg-white/[0.015] text-center transition hover:border-primary/50 hover:bg-primary/[0.04]"
+      className="group relative flex min-h-[320px] flex-col items-center justify-center overflow-hidden rounded-card border border-dashed border-ink/20 bg-surface/40 text-center transition hover:border-ink/40 hover:bg-surface/70"
     >
-      <div className="pointer-events-none absolute -top-10 left-1/2 h-40 w-40 -translate-x-1/2 rounded-full bg-primary/15 opacity-0 blur-3xl transition group-hover:opacity-100" />
-      <div className="relative grid size-11 place-items-center rounded-xl border border-white/10 bg-white/[0.04] text-primary transition group-hover:scale-105 group-hover:border-primary/40">
+      <div className="pointer-events-none absolute -top-10 left-1/2 h-40 w-40 -translate-x-1/2 rounded-full bg-accent/60 opacity-0 blur-3xl transition group-hover:opacity-100" />
+      <div className="relative grid size-11 place-items-center rounded-full bg-control text-control-ink shadow-pill transition group-hover:scale-105">
         <Plus className="size-5" />
       </div>
       <div className="relative mt-3 text-[14px] font-semibold">New video</div>
@@ -134,21 +134,21 @@ export function Home() {
               value={q}
               onChange={(e) => setQ(e.target.value)}
               placeholder="Search projects"
-              className="h-9 border-white/[0.07] bg-white/[0.03] pl-9"
+              className="h-9 border-transparent pl-9 shadow-soft"
             />
           </div>
-          <div className="flex h-9 items-center rounded-lg border border-white/[0.07] bg-white/[0.02] p-1">
+          <div className="flex h-9 items-center rounded-full bg-surface p-1 shadow-soft">
             {FILTERS.map((f) => (
               <button
                 key={f.id}
                 onClick={() => setFilter(f.id)}
                 className={cn(
-                  "relative h-7 rounded-md px-3 text-[13px] font-medium text-muted-foreground transition-colors hover:text-foreground",
-                  filter === f.id && "text-foreground",
+                  "relative h-7 rounded-full px-3.5 text-[13px] font-medium text-ink-soft transition-colors hover:text-foreground",
+                  filter === f.id && "text-accent-ink",
                 )}
               >
                 {filter === f.id && (
-                  <motion.span layoutId="home-filter" className="absolute inset-0 rounded-md bg-white/[0.08]" />
+                  <motion.span layoutId="home-filter" className="absolute inset-0 rounded-full bg-accent" />
                 )}
                 <span className="relative">{f.label}</span>
               </button>
@@ -160,7 +160,7 @@ export function Home() {
       {projects.isLoading ? (
         <div className="grid grid-cols-[repeat(auto-fill,minmax(216px,1fr))] gap-5">
           {Array.from({ length: 8 }).map((_, i) => (
-            <Skeleton key={i} className="aspect-[4/5] rounded-2xl bg-white/[0.04]" />
+            <Skeleton key={i} className="aspect-[4/5] rounded-card" />
           ))}
         </div>
       ) : projects.error ? (
@@ -204,7 +204,7 @@ export function Home() {
           <AlertDialogFooter>
             <AlertDialogCancel>Keep it</AlertDialogCancel>
             <AlertDialogAction
-              className="bg-destructive text-white hover:bg-destructive/90"
+              className="bg-destructive text-control-ink hover:bg-destructive/90"
               onClick={() =>
                 confirm &&
                 del.mutate(confirm.id, { onSuccess: () => toast.success(`Deleted “${confirm.name}”`) })
@@ -227,54 +227,53 @@ function ProjectCard({ p, job }: { p: ProjectSummary; job?: Job }) {
     <motion.div layout initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, scale: 0.97 }}>
       <Link
         to={`/projects/${p.id}`}
-        className="group relative block overflow-hidden rounded-2xl border border-white/[0.06] bg-card transition duration-300 hover:-translate-y-0.5 hover:border-white/[0.14] hover:shadow-[0_18px_40px_-18px_rgb(0_0_0/0.9)]"
+        className="group relative block rounded-card bg-card p-2 shadow-soft transition duration-300 hover:-translate-y-0.5 hover:shadow-lift"
       >
-        <div className="relative aspect-[4/5] overflow-hidden">
+        <div className="relative aspect-[4/5] overflow-hidden rounded-2xl">
           <Thumb
             path={p.thumbnail}
             w={480}
             className="absolute inset-0"
             imgClassName="transition-transform duration-700 group-hover:scale-[1.04]"
           />
-          <div className="absolute inset-0 bg-gradient-to-t from-[#08080a] via-[#08080a]/25 to-transparent" />
-          <div className="absolute top-3 left-3">
+          <div className="absolute top-2 left-2">
             <StatusBadge status={p.status} />
           </div>
           {p.duration != null && !job && (
-            <div className="absolute top-3 right-3 rounded-md bg-black/55 px-1.5 py-0.5 font-mono text-[11px] text-zinc-200 backdrop-blur-md transition group-hover:opacity-0">
+            <div className="absolute top-2 right-2 rounded-full bg-control/75 px-2 py-0.5 font-mono text-[11px] text-control-ink backdrop-blur-md transition group-hover:opacity-0">
               {clock(p.duration)}
             </div>
           )}
           {p.open_questions > 0 && !job && (
-            <div className="absolute top-12 left-3 rounded-full bg-primary/90 px-2 py-0.5 text-[11px] font-medium text-white">
+            <div className="absolute top-10 left-2 rounded-full bg-accent px-2.5 py-0.5 text-[11px] font-medium text-accent-ink shadow-soft">
               {p.open_questions} question{p.open_questions > 1 ? "s" : ""} for you
             </div>
           )}
-          <div className="absolute inset-x-0 bottom-0 p-4">
-            {job && (
-              <div className="mb-3">
-                <div className="mb-1.5 flex justify-between gap-2 text-[11px] text-zinc-300">
-                  <span className="truncate capitalize">{job.status === "queued" ? "Waiting its turn" : job.step}</span>
-                  <span className="font-mono">{Math.round(job.progress)}%</span>
-                </div>
-                <div className="h-1 overflow-hidden rounded-full bg-white/10">
-                  <motion.div
-                    className={cn("h-full rounded-full", job.kind === "render" ? "bg-info" : "bg-primary")}
-                    animate={{ width: `${Math.max(4, job.progress)}%` }}
-                    transition={{ ease: "easeOut" }}
-                  />
-                </div>
+        </div>
+        <div className="px-2 pt-3 pb-1.5">
+          {job && (
+            <div className="mb-2.5">
+              <div className="mb-1.5 flex justify-between gap-2 text-[11px] text-ink-soft">
+                <span className="truncate capitalize">{job.status === "queued" ? "Waiting its turn" : job.step}</span>
+                <span className="font-mono">{Math.round(job.progress)}%</span>
               </div>
-            )}
-            <div className="truncate text-[15px] font-semibold tracking-[-0.01em] text-white">{p.name}</div>
-            <div className="mt-1 flex items-center gap-1.5 text-[12px] text-zinc-400">
-              <Icon className="size-3.5 shrink-0 text-primary" />
-              <span className="truncate">{meta.title}</span>
-              <span className="text-zinc-600">·</span>
-              <span className="shrink-0">{p.latest_version ? `v${p.latest_version}` : `${p.files} files`}</span>
-              <span className="text-zinc-600">·</span>
-              <span className="shrink-0">{timeAgo(p.updated_at)}</span>
+              <div className="h-1 overflow-hidden rounded-full bg-ink/10">
+                <motion.div
+                  className={cn("h-full rounded-full", job.kind === "render" ? "bg-info" : "bg-ink")}
+                  animate={{ width: `${Math.max(4, job.progress)}%` }}
+                  transition={{ ease: "easeOut" }}
+                />
+              </div>
             </div>
+          )}
+          <div className="truncate text-[15px] font-semibold tracking-[-0.01em]">{p.name}</div>
+          <div className="mt-0.5 flex items-center gap-1.5 text-[12px] text-ink-soft">
+            <Icon className="size-3.5 shrink-0" />
+            <span className="truncate">{meta.title}</span>
+            <span aria-hidden>·</span>
+            <span className="shrink-0">{p.latest_version ? `v${p.latest_version}` : `${p.files} files`}</span>
+            <span aria-hidden>·</span>
+            <span className="shrink-0">{timeAgo(p.updated_at)}</span>
           </div>
         </div>
       </Link>

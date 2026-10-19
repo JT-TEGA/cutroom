@@ -21,7 +21,7 @@ export function Thumb({
 }) {
   const [state, setState] = useState<"loading" | "ok" | "error">("loading")
   return (
-    <div className={cn("relative overflow-hidden bg-[#141418]", className)}>
+    <div className={cn("relative overflow-hidden bg-surface-2", className)}>
       {path && state !== "error" && (
         <img
           src={thumbUrl(path, w, t)}
@@ -38,7 +38,7 @@ export function Thumb({
         />
       )}
       {state === "loading" && path && (
-        <div className="absolute inset-0 animate-pulse bg-gradient-to-br from-white/[0.04] to-transparent" />
+        <div className="absolute inset-0 animate-pulse bg-gradient-to-br from-ink/[0.05] to-transparent" />
       )}
       {(!path || state === "error") && (
         <div className="absolute inset-0 grid place-items-center text-subtle">

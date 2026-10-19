@@ -15,6 +15,17 @@ npm run lint         # rule tests + eslint (cutroom/effect-returns, react-hooks/
 npm run build        # lint, then tsc, then vite build
 ```
 
+### Look
+
+The light "Butter" theme lives in `src/index.css`: a small palette (`--bg`, `--surface`, `--surface-2`, `--ink`,
+`--ink-soft`, `--ink-faint`, `--border`, `--accent`, `--accent-ink`, `--control`, `--control-ink`, `--success` and
+the text-safe `--*-ink` status colours) with shadcn's names mapped onto it. Components use those tokens (`bg-surface`,
+`text-ink-soft`, `bg-accent`, `shadow-soft`, `rounded-card`…), never their own hex values. Black pill = the main action
+on a screen (`<Button>`), outline pill = the second one, yellow = whatever is active or selected (`variant="accent"`
+for a yellow pill). Every text token passes WCAG AA (4.5:1) on `--bg`, `--surface` and `--surface-2`; `--success`,
+`--warn` and `--info` are for dots and fills, their `-ink` versions for text. The video's own look (caption colours,
+stickers in the monitor preview) comes from brand.md, not from the theme.
+
 ### Lint
 
 `eslint-rules/effect-returns.js` is a small custom rule: an effect may return nothing or a cleanup function.

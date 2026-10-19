@@ -338,10 +338,19 @@ async function mainFlow() {
   const pid = page.url().split("/projects/")[1].split("/")[0]
   log("project", pid)
 
+  // 2a. nothing added yet: the clips card says what's needed, the edit order is a slim bar, Continue waits
+  await page.waitForSelector("[data-testid='clips-required']", { timeout: 10_000 })
+  await page.waitForSelector("[data-testid='edit-order'][data-state='collapsed']", { timeout: 10_000 })
+  const continueOff = await page.$$eval("button", (bs) => bs.find((b) => b.innerText.trim().startsWith("Continue"))?.disabled)
+  if (!continueOff) throw new Error("Continue should be disabled on the media step until a clip or photo is added")
+  await shot("03a-media-empty", 900)
+
   // 2. media: clips, voice memo, track
   const clips = ["alarm-5am.mp4", "pre-workout.mp4", "incline-bench.mp4", "cable-fly.mp4", "lagoon-walk.mp4", "brunch-lekki.mp4", "fit-check.jpg"].map((f) => m("gym", f))
   await (await page.$('input[data-testid="upload-clip"]')).uploadFile(...clips)
   await waitText("Added 7 files", 120_000)
+  await page.waitForSelector("[data-testid='edit-order'][data-state='expanded']", { timeout: 10_000 })
+  if (await page.$("[data-testid='clips-required']")) throw new Error("the clips card still asks for a clip after 7 were added")
   await (await page.$('input[data-testid="upload-voiceover"]')).uploadFile(m("chest-day-vo.m4a"))
   await waitText("chest-day-vo.m4a", 60_000)
   await (await page.$('input[data-testid="upload-music"]')).uploadFile(m("afro-drill-120.wav"))

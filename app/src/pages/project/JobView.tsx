@@ -43,7 +43,7 @@ function Log({ lines }: { lines: string[] }) {
     if (open && box.current) box.current.scrollTop = box.current.scrollHeight
   }, [open, lines.length])
   return (
-    <div className="mt-6 overflow-hidden rounded-xl border border-white/[0.06] bg-[#0b0b0e]">
+    <div className="mt-6 overflow-hidden rounded-card bg-surface shadow-soft">
       <button onClick={() => setOpen((o) => !o)} className="flex w-full items-center gap-2.5 px-4 py-3 text-left text-[12.5px] text-muted-foreground transition hover:text-foreground">
         <Terminal className="size-3.5" />
         <span className="flex-1">{open ? "Hide" : "Show"} log</span>
@@ -53,9 +53,9 @@ function Log({ lines }: { lines: string[] }) {
       <AnimatePresence initial={false}>
         {open && (
           <motion.div initial={{ height: 0 }} animate={{ height: "auto" }} exit={{ height: 0 }} className="overflow-hidden">
-            <pre ref={box} className="max-h-72 overflow-auto border-t border-white/[0.05] px-4 py-3 font-mono text-[11.5px] leading-[1.7] break-all whitespace-pre-wrap text-zinc-400">
+            <pre ref={box} className="max-h-72 overflow-auto border-t border-border px-4 py-3 font-mono text-[11.5px] leading-[1.7] break-all whitespace-pre-wrap text-ink-soft">
               {lines.length ? lines.map((l, i) => (
-                <div key={i} className={cn(/FAILED|error|!!/.test(l) && "text-red-300", /^\s*brain:/.test(l) && "text-violet-300")}>
+                <div key={i} className={cn(/FAILED|error|!!/.test(l) && "text-destructive", /^\s*brain:/.test(l) && "font-medium text-foreground")}>
                   {l}
                 </div>
               )) : "Waiting for output…"}
@@ -132,8 +132,8 @@ function JobScreen({ jobId }: { jobId: string }) {
   if (!job)
     return (
       <Page className="max-w-[760px]">
-        <Skeleton className="mb-6 h-8 w-64 bg-white/[0.04]" />
-        <Skeleton className="h-80 rounded-2xl bg-white/[0.04]" />
+        <Skeleton className="mb-6 h-8 w-64" />
+        <Skeleton className="h-80 rounded-2xl" />
       </Page>
     )
 
@@ -154,14 +154,14 @@ function JobScreen({ jobId }: { jobId: string }) {
           <h1 className="text-[26px] font-semibold tracking-[-0.02em]">{done ? copy.done : copy.title}</h1>
         </div>
         {elapsed && (
-          <div className="flex items-center gap-1.5 rounded-lg border border-white/[0.06] px-2.5 py-1.5 font-mono text-[12px] text-muted-foreground">
+          <div className="flex items-center gap-1.5 rounded-full bg-surface px-3 py-1.5 font-mono text-[12px] text-ink-soft shadow-soft">
             <Clock className="size-3.5" /> {elapsed}
           </div>
         )}
       </div>
 
       <div className="panel relative overflow-hidden p-8">
-        <div className={cn("pointer-events-none absolute -top-24 left-1/2 h-56 w-[520px] -translate-x-1/2 rounded-full blur-3xl transition-opacity duration-700", brain ? "bg-primary/20 opacity-100" : "bg-info/10 opacity-60", failed && "bg-destructive/10")} />
+        <div className={cn("pointer-events-none absolute -top-24 left-1/2 h-56 w-[520px] -translate-x-1/2 rounded-full blur-3xl transition-opacity duration-700", brain ? "bg-accent/70 opacity-100" : "bg-info/10 opacity-60", failed && "bg-destructive/10")} />
 
         <AnimatePresence mode="wait">
           {failed ? (
@@ -193,7 +193,7 @@ function JobScreen({ jobId }: { jobId: string }) {
             </motion.div>
           ) : done ? (
             <motion.div key="done" initial={{ opacity: 0, scale: 0.96 }} animate={{ opacity: 1, scale: 1 }} className="relative flex flex-col items-center py-6 text-center">
-              <motion.div initial={{ scale: 0.6 }} animate={{ scale: 1 }} transition={{ type: "spring", stiffness: 300, damping: 18 }} className="grid size-14 place-items-center rounded-full bg-ok/15 text-ok shadow-[0_0_40px_-6px_rgb(61_220_151/0.6)]">
+              <motion.div initial={{ scale: 0.6 }} animate={{ scale: 1 }} transition={{ type: "spring", stiffness: 300, damping: 18 }} className="grid size-14 place-items-center rounded-full bg-success/15 text-success-ink">
                 <Check className="size-6" />
               </motion.div>
               <div className="mt-4 text-[16px] font-semibold">{copy.done}</div>
@@ -213,14 +213,14 @@ function JobScreen({ jobId }: { jobId: string }) {
                   <span className="text-[18px] text-muted-foreground">%</span>
                 </div>
               </div>
-              <div className="mt-5 h-2 overflow-hidden rounded-full bg-white/[0.06]">
+              <div className="mt-5 h-2 overflow-hidden rounded-full bg-ink/10">
                 <motion.div
-                  className={cn("relative h-full rounded-full", kind === "render" ? "bg-gradient-to-r from-[#3aa8ff] to-info" : "bg-gradient-to-r from-[#6d4aff] to-[#a78bfa]")}
+                  className={cn("relative h-full rounded-full", kind === "render" ? "bg-info" : "bg-ink")}
                   initial={false}
                   animate={{ width: `${Math.max(2, job.progress)}%` }}
                   transition={{ ease: "easeOut", duration: 0.5 }}
                 >
-                  <div className="absolute inset-0 animate-shimmer bg-[linear-gradient(90deg,transparent,rgb(255_255_255/0.35),transparent)] bg-[length:200%_100%]" />
+                  <div className="absolute inset-0 animate-shimmer bg-[linear-gradient(90deg,transparent,color-mix(in_oklab,var(--surface)_45%,transparent),transparent)] bg-[length:200%_100%]" />
                 </motion.div>
               </div>
               {job.status === "queued" && (
@@ -243,7 +243,7 @@ function JobScreen({ jobId }: { jobId: string }) {
         </AnimatePresence>
 
         {!failed && stages.length > 0 && (
-          <ol className="relative mt-8 grid gap-1 border-t border-white/[0.05] pt-6">
+          <ol className="relative mt-8 grid gap-1 border-t border-border pt-6">
             {stages.map((s, i) => {
               // stages before the first one this page saw happened before it opened: count them as done
               const first = seen.size ? Math.min(...seen) : Math.max(current, 0)
@@ -252,12 +252,12 @@ function JobScreen({ jobId }: { jobId: string }) {
               return (
                 <li key={s.id} className="flex items-center gap-3 py-1 text-[13.5px]">
                   <span className="grid size-5 place-items-center">
-                    {state === "done" && <Check className="size-4 text-ok" />}
+                    {state === "done" && <Check className="size-4 text-success-ink" />}
                     {state === "skipped" && <Minus className="size-4 text-subtle" />}
-                    {state === "active" && <Loader2 className={cn("size-4 animate-spin", isBrainStep(job.step) ? "text-primary" : "text-info")} />}
-                    {state === "pending" && <Circle className="size-3 text-subtle/60" />}
+                    {state === "active" && <Loader2 className={cn("size-4 animate-spin", isBrainStep(job.step) ? "text-foreground" : "text-info-ink")} />}
+                    {state === "pending" && <Circle className="size-3 text-subtle" />}
                   </span>
-                  <span className={cn(state === "active" ? "font-medium text-foreground" : state === "done" ? "text-zinc-300" : "text-subtle")}>
+                  <span className={cn(state === "active" ? "font-medium text-foreground" : state === "done" ? "text-ink-soft" : "text-subtle")}>
                     {s.label}
                   </span>
                   {state === "skipped" && <span className="text-[11.5px] text-subtle">not needed</span>}

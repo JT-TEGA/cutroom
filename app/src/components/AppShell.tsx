@@ -19,7 +19,7 @@ const NAV = [
 function BrainChip() {
   const { data: s, isLoading } = useSystemStatus()
   const cc = (s?.claude_code ?? {}) as { logged_in?: boolean; subscription?: string }
-  let dot = "bg-zinc-500"
+  let dot = "bg-ink-faint"
   let label = "Checking…"
   let sub = ""
   if (s?.demo) {
@@ -28,7 +28,7 @@ function BrainChip() {
     sub = "scripted answers"
   } else if (s) {
     const ready = !!s.brain?.ready
-    dot = ready ? "bg-ok" : "bg-warn"
+    dot = ready ? "bg-success" : "bg-warn"
     if (s.brain?.backend === "anthropic-api") {
       label = "Anthropic API"
       sub = ready ? String(s.brain?.model ?? "") : "no API key"
@@ -43,12 +43,12 @@ function BrainChip() {
   return (
     <NavLink
       to="/settings"
-      className="group flex items-center gap-2.5 rounded-lg border border-white/[0.06] bg-white/[0.02] px-3 py-2.5 transition hover:bg-white/[0.05] max-xl:justify-center max-xl:px-0"
+      className="group flex items-center gap-2.5 rounded-full bg-surface-2/70 px-3.5 py-2 transition hover:bg-surface-2 max-xl:justify-center max-xl:px-0"
     >
-      <span className={cn("size-2 shrink-0 rounded-full shadow-[0_0_10px_currentColor]", dot)} />
+      <span className={cn("size-2 shrink-0 rounded-full", dot)} />
       <span className="min-w-0 leading-tight max-xl:hidden">
         <span className="block text-[12.5px] font-medium">{label}</span>
-        {sub && <span className="block truncate text-[11.5px] text-muted-foreground">{sub}</span>}
+        {sub && <span className="block truncate text-[11.5px] text-ink-soft">{sub}</span>}
       </span>
     </NavLink>
   )
@@ -59,7 +59,7 @@ function Sidebar() {
   const { data: projects } = useProjects()
   const recent = (projects ?? []).slice(0, 5)
   return (
-    <aside className="flex h-screen w-[244px] shrink-0 flex-col border-r border-sidebar-border bg-sidebar px-3 pt-4 pb-3 max-xl:w-[68px] max-xl:px-2.5">
+    <aside className="my-3 ml-3 flex h-[calc(100vh-24px)] w-[236px] shrink-0 flex-col rounded-card bg-sidebar px-3 pt-4 pb-3 shadow-soft max-xl:w-[64px] max-xl:px-2">
       <NavLink to="/" className="mb-5 flex items-center gap-2.5 px-1.5 max-xl:justify-center max-xl:px-0">
         <LogoMark />
         <span className="text-[15px] font-semibold tracking-[-0.01em] max-xl:hidden">Cutroom</span>
@@ -85,8 +85,8 @@ function Sidebar() {
             end={n.end}
             className={({ isActive }) =>
               cn(
-                "flex h-9 items-center gap-2.5 rounded-lg px-2.5 text-[13.5px] font-medium text-muted-foreground transition-colors hover:bg-white/[0.04] hover:text-foreground max-xl:justify-center max-xl:px-0",
-                isActive && "bg-white/[0.06] text-foreground",
+                "flex h-9 items-center gap-2.5 rounded-full px-3 text-[13.5px] font-medium text-ink-soft transition-colors hover:bg-ink/[0.05] hover:text-foreground max-xl:justify-center max-xl:px-0",
+                isActive && "bg-accent text-accent-ink hover:bg-accent",
               )
             }
           >
@@ -106,12 +106,12 @@ function Sidebar() {
                 to={`/projects/${p.id}`}
                 className={({ isActive }) =>
                   cn(
-                    "group flex items-center gap-2.5 rounded-lg px-2 py-1.5 text-[13px] text-muted-foreground transition-colors hover:bg-white/[0.04] hover:text-foreground",
-                    isActive && "bg-white/[0.05] text-foreground",
+                    "group flex items-center gap-2.5 rounded-full py-1.5 pr-3 pl-1.5 text-[13px] text-ink-soft transition-colors hover:bg-ink/[0.05] hover:text-foreground",
+                    isActive && "bg-accent text-accent-ink hover:bg-accent",
                   )
                 }
               >
-                <Thumb path={p.thumbnail} w={96} className="h-7 w-[18px] shrink-0 rounded-[4px]" />
+                <Thumb path={p.thumbnail} w={96} className="h-7 w-[18px] shrink-0 rounded-[6px]" />
                 <span className="min-w-0 flex-1 truncate">{p.name}</span>
                 <StatusDot status={p.status} />
               </NavLink>

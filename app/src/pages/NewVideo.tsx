@@ -45,7 +45,7 @@ export function NewVideo() {
           onChange={(e) => setName(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && go()}
           placeholder="e.g. 5AM chest day"
-          className="h-10 bg-white/[0.03]"
+          className="h-10 border-transparent shadow-soft"
         />
       </div>
 

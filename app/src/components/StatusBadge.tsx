@@ -17,7 +17,7 @@ export function StatusBadge({ status, className }: { status: ProjectStatus | str
   return (
     <span
       className={cn(
-        "inline-flex h-6 items-center gap-1.5 rounded-full border border-white/[0.08] bg-black/40 px-2.5 text-[11.5px] font-medium backdrop-blur-md",
+        "inline-flex h-6 items-center gap-1.5 rounded-full bg-surface/90 px-2.5 text-[11.5px] font-medium shadow-soft backdrop-blur-md",
         s.text,
         className,
       )}

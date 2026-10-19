@@ -22,18 +22,18 @@ function Row({ k, children }: { k: string; children: ReactNode }) {
   return (
     <div className="flex items-baseline justify-between gap-4 py-1.5 text-[12.5px]">
       <span className="shrink-0 text-muted-foreground">{k}</span>
-      <span className="min-w-0 truncate text-right text-zinc-200">{children}</span>
+      <span className="min-w-0 truncate text-right text-foreground">{children}</span>
     </div>
   )
 }
 
 function Why({ children }: { children: ReactNode }) {
   return (
-    <div className="relative overflow-hidden rounded-xl border border-primary/25 bg-gradient-to-br from-primary/[0.14] to-primary/[0.03] p-4">
-      <div className="mb-1.5 flex items-center gap-1.5 text-[11px] font-semibold tracking-[0.08em] text-violet-200 uppercase">
+    <div className="relative overflow-hidden rounded-2xl bg-accent-soft p-4">
+      <div className="mb-1.5 flex items-center gap-1.5 text-[11px] font-semibold tracking-[0.08em] text-accent-ink uppercase">
         <Sparkles className="size-3.5" /> Why this cut
       </div>
-      <div className="text-[13.5px] leading-relaxed text-violet-50">{children}</div>
+      <div className="text-[13.5px] leading-relaxed text-foreground">{children}</div>
     </div>
   )
 }
@@ -47,7 +47,7 @@ function SwapPicker({ files, pid, current, onPick }: { files: ProjectFile[]; pid
           <Repeat2 /> Swap clip
         </Button>
       </PopoverTrigger>
-      <PopoverContent align="start" className="w-[300px] border-white/10 bg-popover p-3">
+      <PopoverContent align="start" className="w-[300px] p-3">
         <div className="mb-2 text-[12px] text-muted-foreground">Pick a clip or photo to use here</div>
         <div className="grid max-h-[320px] grid-cols-4 gap-2 overflow-y-auto">
           {files.map((f) => (
@@ -61,7 +61,7 @@ function SwapPicker({ files, pid, current, onPick }: { files: ProjectFile[]; pid
               className="group text-left disabled:opacity-40"
               title={f.name}
             >
-              <Thumb path={`${pid}/${f.path}`} w={140} className="aspect-[9/16] rounded-md border border-white/10 transition group-hover:border-primary" />
+              <Thumb path={`${pid}/${f.path}`} w={140} className="aspect-[9/16] rounded-xl ring-1 ring-ink/10 transition group-hover:ring-2 group-hover:ring-ink" />
               <div className="mt-1 truncate text-[10.5px] text-muted-foreground">{f.name}</div>
             </button>
           ))}
@@ -104,27 +104,27 @@ function ShotPanel({
             {s.label && !s.label.startsWith("shot-") && <> · “{s.label}”</>}
           </div>
         </div>
-        <span className="rounded-md bg-white/[0.05] px-2 py-1 font-mono text-[11.5px] text-zinc-300">{secs(s.duration)}</span>
+        <span className="rounded-full bg-surface-2 px-2.5 py-1 font-mono text-[11.5px] text-foreground">{secs(s.duration)}</span>
       </div>
 
-      <Why>{s.reason || (seg.type === "vo" ? seg.reason : null) || <span className="text-violet-200/60">No reason recorded for this shot.</span>}</Why>
+      <Why>{s.reason || (seg.type === "vo" ? seg.reason : null) || <span className="text-ink-soft">No reason recorded for this shot.</span>}</Why>
 
       {words && (
-        <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4">
+        <div className="rounded-2xl bg-surface-2/60 p-4">
           <div className="mb-1.5 flex items-center gap-1.5 text-[11px] font-semibold tracking-[0.08em] text-muted-foreground uppercase">
             <Quote className="size-3.5" /> {s.heard ? "Heard over it" : "Said in it"}
           </div>
-          <div className="text-[13.5px] leading-relaxed text-zinc-200">“{words}”</div>
+          <div className="text-[13.5px] leading-relaxed text-foreground">“{words}”</div>
         </div>
       )}
 
       {s.warning && (
-        <div className="flex gap-2 rounded-xl border border-warn/25 bg-warn/[0.06] p-3 text-[12.5px] text-amber-100">
-          <AlertTriangle className="mt-0.5 size-3.5 shrink-0 text-warn" /> {s.warning}
+        <div className="flex gap-2 rounded-2xl border border-warn/40 bg-warn/10 p-3 text-[12.5px] text-warn-ink">
+          <AlertTriangle className="mt-0.5 size-3.5 shrink-0" /> {s.warning}
         </div>
       )}
 
-      <div className="divide-y divide-white/[0.05] rounded-xl border border-white/[0.06] px-4 py-1">
+      <div className="divide-y divide-border rounded-2xl border border-border px-4 py-1">
         <Row k="Source">{basename(src) || "–"}</Row>
         {s.kind === "clip" && <Row k="Uses">{`${tc(s.in)} – ${tc(s.out)} of the clip`}</Row>}
         <Row k="Plays">{`${tc(s.start)} – ${tc(s.end)}`}</Row>
@@ -144,8 +144,8 @@ function ShotPanel({
                   key={t.id || "cut"}
                   onClick={() => onTransition(t.id || null)}
                   className={cn(
-                    "flex h-14 flex-col items-center justify-center gap-1 rounded-lg border text-[11.5px] font-medium transition",
-                    on ? "border-primary/60 bg-primary/15 text-white" : "border-white/[0.07] text-muted-foreground hover:border-white/15 hover:text-foreground",
+                    "flex h-14 flex-col items-center justify-center gap-1 rounded-2xl border text-[11.5px] font-medium transition",
+                    on ? "border-transparent bg-accent text-accent-ink" : "border-border text-muted-foreground hover:border-ink/30 hover:text-foreground",
                   )}
                 >
                   <t.icon className="size-4" />
@@ -159,7 +159,7 @@ function ShotPanel({
 
       <div className="flex gap-2">
         {swappable && <SwapPicker files={files} pid={pid} current={src} onPick={onSwap} />}
-        <Button variant="outline" size="sm" className="flex-1 hover:border-destructive/40 hover:text-red-200" onClick={onDelete}>
+        <Button variant="outline" size="sm" className="flex-1 hover:border-destructive/40 hover:text-destructive" onClick={onDelete}>
           <Trash2 /> Delete shot
         </Button>
       </div>
@@ -195,12 +195,12 @@ function TextPanel({ item, span, onChange, onDelete }: { item: TextOverlay; span
       <div className="grid gap-3">
         <div>
           <label className="mb-1.5 block text-[12px] font-medium text-muted-foreground">Text</label>
-          <Input name="overlay-text" value={text} onChange={(e) => setText(e.target.value)} onBlur={commit} onKeyDown={(e) => e.key === "Enter" && commit()} className="bg-white/[0.03]" />
+          <Input name="overlay-text" value={text} onChange={(e) => setText(e.target.value)} onBlur={commit} onKeyDown={(e) => e.key === "Enter" && commit()} />
           <div className="mt-1 text-[11.5px] text-subtle">Wrap a word in *stars* for the emphasis colour.</div>
         </div>
         <div>
           <label className="mb-1.5 block text-[12px] font-medium text-muted-foreground">Second line</label>
-          <Input value={sub} onChange={(e) => setSub(e.target.value)} onBlur={commit} onKeyDown={(e) => e.key === "Enter" && commit()} placeholder="e.g. 4 × 10" className="bg-white/[0.03]" />
+          <Input value={sub} onChange={(e) => setSub(e.target.value)} onBlur={commit} onKeyDown={(e) => e.key === "Enter" && commit()} placeholder="e.g. 4 × 10" />
         </div>
         <div>
           <label className="mb-1.5 block text-[12px] font-medium text-muted-foreground">Style</label>
@@ -210,8 +210,8 @@ function TextPanel({ item, span, onChange, onDelete }: { item: TextOverlay; span
                 key={st}
                 onClick={() => onChange({ style: st })}
                 className={cn(
-                  "h-7 rounded-md border px-2.5 text-[12px] font-medium transition",
-                  item.style === st ? "border-primary/60 bg-primary/15 text-white" : "border-white/[0.07] text-muted-foreground hover:text-foreground",
+                  "h-7 rounded-full border px-3 text-[12px] font-medium transition",
+                  item.style === st ? "border-transparent bg-accent text-accent-ink" : "border-border text-muted-foreground hover:text-foreground",
                 )}
               >
                 {st === "lower3" ? "lower third" : st}
@@ -220,7 +220,7 @@ function TextPanel({ item, span, onChange, onDelete }: { item: TextOverlay; span
           </div>
         </div>
       </div>
-      <Button variant="outline" size="sm" className="hover:border-destructive/40 hover:text-red-200" onClick={onDelete}>
+      <Button variant="outline" size="sm" className="hover:border-destructive/40 hover:text-destructive" onClick={onDelete}>
         <Trash2 /> Remove text
       </Button>
     </div>
@@ -238,7 +238,7 @@ function Overview({ view, project, onRevise, revising }: { view: TimelineView; p
         <div className="mt-0.5 text-[12.5px] text-muted-foreground">Click a shot or a label to see why it's there.</div>
       </div>
       {project.plan_summary && <Why>{project.plan_summary}</Why>}
-      <div className="divide-y divide-white/[0.05] rounded-xl border border-white/[0.06] px-4 py-1">
+      <div className="divide-y divide-border rounded-2xl border border-border px-4 py-1">
         <Row k="Length">
           {clock(view.duration)}
           {view.target_length ? <span className="text-muted-foreground"> / target {clock(view.target_length)}</span> : null}
@@ -261,7 +261,7 @@ function Overview({ view, project, onRevise, revising }: { view: TimelineView; p
           <div className="mb-2 text-[12px] font-medium text-muted-foreground">Editor's notes</div>
           <ul className="grid gap-2">
             {view.notes!.map((n, i) => (
-              <li key={i} className="flex gap-2.5 text-[12.5px] leading-relaxed text-zinc-300">
+              <li key={i} className="flex gap-2.5 text-[12.5px] leading-relaxed text-foreground">
                 <Film className="mt-1 size-3 shrink-0 text-primary" />
                 {n}
               </li>
@@ -270,21 +270,21 @@ function Overview({ view, project, onRevise, revising }: { view: TimelineView; p
         </div>
       )}
       {(view.problems?.length ?? 0) > 0 && (
-        <div className="rounded-xl border border-warn/20 bg-warn/[0.05] p-3">
-          <div className="mb-1.5 text-[12px] font-medium text-amber-200">Worth a look</div>
-          <ul className="grid gap-1 text-[12px] text-amber-100/80">
+        <div className="rounded-2xl border border-warn/40 bg-warn/10 p-3">
+          <div className="mb-1.5 text-[12px] font-medium text-warn-ink">Worth a look</div>
+          <ul className="grid gap-1 text-[12px] text-warn-ink">
             {view.problems!.map((p, i) => (
               <li key={i}>{p}</li>
             ))}
           </ul>
         </div>
       )}
-      <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-3">
-        <div className="mb-2 flex items-center gap-1.5 text-[12px] font-medium text-zinc-300">
+      <div className="rounded-2xl bg-surface-2/60 p-3">
+        <div className="mb-2 flex items-center gap-1.5 text-[12px] font-medium text-foreground">
           <Sparkles className="size-3.5 text-primary" /> Ask Claude to change something
         </div>
-        <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={3} placeholder="Open on the bench set, and make the sticker say “5AM”" className="bg-black/20 text-[13px]" />
-        <Button size="sm" className="mt-2 w-full" disabled={!notes.trim() || revising} onClick={() => onRevise(notes.trim())}>
+        <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={3} placeholder="Open on the bench set, and make the sticker say “5AM”" className="text-[13px]" />
+        <Button size="sm" variant="outline" className="mt-2 w-full" disabled={!notes.trim() || revising} onClick={() => onRevise(notes.trim())}>
           {revising ? <Loader2 className="animate-spin" /> : <Send />} Revise the plan
         </Button>
       </div>
@@ -356,9 +356,9 @@ export function Inspector({
             <div className="text-[16px] font-semibold tracking-[-0.01em]">Cutaway</div>
             <div className="mt-0.5 text-[12.5px] text-muted-foreground">B-roll over your talking; your voice keeps playing.</div>
           </div>
-          <Thumb path={`${project.id}/${b.src}`} w={360} className="aspect-[9/16] w-32 rounded-lg border border-white/10" />
+          <Thumb path={`${project.id}/${b.src}`} w={360} className="aspect-[9/16] w-32 rounded-xl shadow-soft" />
           <Why>{b.reason || "Covers the explanation with something to look at."}</Why>
-          <div className="divide-y divide-white/[0.05] rounded-xl border border-white/[0.06] px-4 py-1">
+          <div className="divide-y divide-border rounded-2xl border border-border px-4 py-1">
             <Row k="Source">{basename(b.src)}</Row>
             {o && <Row k="Plays">{`${tc(o.start)} – ${tc(o.end)}`}</Row>}
             {b.cue && <Row k="Cue">“{b.cue}”</Row>}

@@ -21,18 +21,18 @@ const IDEAS = ["Open on a stronger shot", "Make it faster", "Add a flash on the 
 /** Posting with the in-app sound: which song, the second to start it at, and the two files. */
 function InAppCard({ card, pid, version }: { card: InAppSound; pid: string; version: number }) {
   return (
-    <div className="panel relative overflow-hidden border-primary/35 p-5" data-testid="in-app-card">
-      <div className="pointer-events-none absolute -top-20 -right-16 size-56 rounded-full bg-primary/20 blur-3xl" />
+    <div className="panel relative overflow-hidden p-5 ring-[1.5px] ring-ink" data-testid="in-app-card">
+      <div className="pointer-events-none absolute -top-20 -right-16 size-56 rounded-full bg-accent/70 blur-3xl" />
       <div className="relative flex flex-wrap items-start gap-5">
-        <span className="grid size-11 shrink-0 place-items-center rounded-xl border border-primary/30 bg-primary/15 text-primary">
+        <span className="grid size-11 shrink-0 place-items-center rounded-full bg-control text-accent">
           <Smartphone className="size-5" />
         </span>
         <div className="min-w-0 flex-1">
           <div className="eyebrow mb-1.5">Post with the in-app sound</div>
-          <div className="text-[15px] leading-snug text-zinc-200">
-            In Instagram/TikTok, pick <b className="text-white">{card.song.replace(/\.[^.]+$/, "")}</b> and start it at
+          <div className="text-[15px] leading-snug text-foreground">
+            In Instagram/TikTok, pick <b>{card.song.replace(/\.[^.]+$/, "")}</b> and start it at
           </div>
-          <div className="mt-1 font-mono text-[44px] leading-none font-semibold tracking-tight text-white" data-testid="in-app-start">
+          <div className="mt-1 font-mono text-[44px] leading-none font-semibold tracking-tight text-foreground" data-testid="in-app-start">
             {card.start_label}
           </div>
           <p className="mt-2.5 text-[12.5px] leading-relaxed text-muted-foreground">
@@ -40,20 +40,20 @@ function InAppCard({ card, pid, version }: { card: InAppSound; pid: string; vers
             its beat from there. Use the same version of the song as the one you uploaded.
           </p>
           {card.voice && (
-            <div className="mt-3 flex items-start gap-2 rounded-lg border border-white/[0.07] bg-white/[0.03] px-3 py-2 text-[12.5px] text-zinc-300">
-              <Volume1 className="mt-0.5 size-3.5 shrink-0 text-primary" />
+            <div className="mt-3 flex items-start gap-2 rounded-2xl bg-surface-2/70 px-3.5 py-2.5 text-[12.5px] text-foreground">
+              <Volume1 className="mt-0.5 size-3.5 shrink-0" />
               Your voice is in the file to post: turn the song down in the app (about 20%) and keep the original sound at 100%, so it
               sits under what you say.
             </div>
           )}
           {card.warning && (
-            <div className="mt-3 flex items-start gap-2 rounded-lg border border-warn/25 bg-warn/[0.06] px-3 py-2 text-[12.5px] text-zinc-200">
-              <AlertTriangle className="mt-0.5 size-3.5 shrink-0 text-warn" />
+            <div className="mt-3 flex items-start gap-2 rounded-2xl border border-warn/40 bg-warn/[0.08] px-3.5 py-2.5 text-[12.5px] text-foreground">
+              <AlertTriangle className="mt-0.5 size-3.5 shrink-0 text-warn-ink" />
               {card.warning}
             </div>
           )}
           <div className="mt-4 flex flex-wrap gap-2">
-            <Button asChild>
+            <Button asChild variant="accent">
               <a href={postVideoUrl(pid, version, true)} download>
                 <Download /> Video to post (no music)
               </a>
@@ -86,8 +86,8 @@ export function Result() {
     return (
       <Page wide>
         <div className="grid grid-cols-[auto_1fr] gap-10">
-          <Skeleton className="aspect-[9/16] h-[640px] rounded-[22px] bg-white/[0.04]" />
-          <Skeleton className="h-[640px] rounded-2xl bg-white/[0.04]" />
+          <Skeleton className="aspect-[9/16] h-[640px] rounded-[22px]" />
+          <Skeleton className="h-[640px] rounded-2xl" />
         </div>
       </Page>
     )
@@ -131,7 +131,7 @@ export function Result() {
             className="h-[min(calc(100vh-150px),820px)] min-h-[520px]"
           />
           {card && (
-            <div className="mt-3 flex rounded-lg border border-white/[0.07] p-0.5 text-[12.5px]">
+            <div className="mt-4 flex rounded-full bg-surface p-1 text-[12.5px] shadow-soft">
               {[
                 [false, "With the music"],
                 [true, "As posted (no music)"],
@@ -140,8 +140,8 @@ export function Result() {
                   key={String(v)}
                   onClick={() => setAsPosted(v as boolean)}
                   className={cn(
-                    "h-7 rounded-md px-3 font-medium transition",
-                    asPosted === v ? "bg-white/[0.09] text-foreground" : "text-muted-foreground hover:text-foreground",
+                    "h-7 rounded-full px-3.5 font-medium transition",
+                    asPosted === v ? "bg-accent text-accent-ink" : "text-ink-soft hover:text-foreground",
                   )}
                 >
                   {label as string}
@@ -157,7 +157,7 @@ export function Result() {
               <div className="eyebrow mb-2">Your video</div>
               <h1 className="text-[26px] font-semibold tracking-[-0.02em]">
                 Version {out.version}
-                {out.version === list[0].version && <span className="ml-2.5 align-middle rounded-md bg-ok/15 px-2 py-0.5 text-[12px] font-medium text-emerald-200">latest</span>}
+                {out.version === list[0].version && <span className="ml-2.5 rounded-full bg-success/15 px-2.5 py-0.5 align-middle text-[12px] font-medium text-success-ink">latest</span>}
               </h1>
               <div className="mt-1.5 text-[13px] text-muted-foreground">
                 {clock(out.duration)} · 9:16 MP4 · {bytes(out.size_bytes)}
@@ -186,11 +186,11 @@ export function Result() {
                   key={o.version}
                   onClick={() => setSearch({ v: String(o.version) }, { replace: true })}
                   className={cn(
-                    "flex items-center gap-2.5 rounded-xl border px-3 py-2 text-left transition",
-                    o.version === out.version ? "border-primary/60 bg-primary/10" : "border-white/[0.07] hover:border-white/15",
+                    "flex items-center gap-2.5 rounded-2xl px-3.5 py-2 text-left transition",
+                    o.version === out.version ? "bg-accent-soft ring-[1.5px] ring-ink" : "bg-surface shadow-soft hover:shadow-lift",
                   )}
                 >
-                  <span className={cn("font-mono text-[13px] font-semibold", o.version === out.version ? "text-white" : "text-zinc-300")}>v{o.version}</span>
+                  <span className={cn("font-mono text-[13px] font-semibold", o.version === out.version ? "text-accent-ink" : "text-foreground")}>v{o.version}</span>
                   <span className="text-[11.5px] leading-tight text-muted-foreground">
                     {clock(o.duration)}
                     <br />
@@ -214,19 +214,19 @@ export function Result() {
               onKeyDown={(e) => (e.metaKey || e.ctrlKey) && e.key === "Enter" && revise()}
               rows={3}
               placeholder="Open on the bench set, make the sticker say “5AM” and use flash cuts on the training part"
-              className="bg-white/[0.025] text-[13.5px] leading-relaxed"
+              className="text-[13.5px] leading-relaxed"
             />
             <div className="mt-3 flex flex-wrap items-center gap-2">
               {IDEAS.map((i) => (
                 <button
                   key={i}
                   onClick={() => setNotes((n) => (n ? `${n.replace(/\s+$/, "")}, ${i.toLowerCase()}` : i))}
-                  className="h-7 rounded-full border border-white/[0.07] px-2.5 text-[12px] text-muted-foreground transition hover:border-white/15 hover:text-foreground"
+                  className="h-7 rounded-full border border-ink/15 px-3 text-[12px] text-ink-soft transition hover:border-ink/35 hover:text-foreground"
                 >
                   {i}
                 </button>
               ))}
-              <Button className="ml-auto" disabled={!notes.trim() || start.isPending} onClick={revise}>
+              <Button variant="outline" className="ml-auto" disabled={!notes.trim() || start.isPending} onClick={revise}>
                 {start.isPending ? <Loader2 className="animate-spin" /> : <Send />} Revise & render
               </Button>
             </div>
@@ -240,7 +240,7 @@ export function Result() {
               <span className="text-[12px] text-muted-foreground">six moments, to check at a glance</span>
             </div>
             {out.contact_sheet_url ? (
-              <button onClick={() => setSheet(true)} className="block w-full overflow-hidden rounded-lg border border-white/[0.06] transition hover:border-white/20">
+              <button onClick={() => setSheet(true)} className="block w-full overflow-hidden rounded-2xl ring-1 ring-ink/10 transition hover:ring-ink/30">
                 <img src={contactUrl(pid, out.version)} alt={`Contact sheet for version ${out.version}`} className="w-full" />
               </button>
             ) : (
@@ -263,9 +263,9 @@ export function Result() {
                     : "none",
               ],
             ].map(([k, val]) => (
-              <div key={k} className="rounded-xl border border-white/[0.05] bg-white/[0.015] px-4 py-3">
+              <div key={k} className="rounded-2xl bg-surface px-4 py-3 shadow-soft">
                 <div className="text-[11.5px] text-muted-foreground">{k}</div>
-                <div className="mt-0.5 text-[13px] text-zinc-200">{val}</div>
+                <div className="mt-0.5 text-[13px] text-foreground">{val}</div>
               </div>
             ))}
           </div>
@@ -273,9 +273,9 @@ export function Result() {
       </div>
 
       <Dialog open={sheet} onOpenChange={setSheet}>
-        <DialogContent className="max-w-[min(1200px,92vw)] border-white/10 bg-[#0d0d10] p-3 sm:max-w-[min(1200px,92vw)]">
+        <DialogContent className="max-w-[min(1200px,92vw)] p-3 sm:max-w-[min(1200px,92vw)]">
           <DialogTitle className="sr-only">Contact sheet</DialogTitle>
-          <img src={contactUrl(pid, out.version)} alt="" className="w-full rounded-lg" />
+          <img src={contactUrl(pid, out.version)} alt="" className="w-full rounded-2xl" />
         </DialogContent>
       </Dialog>
     </Page>

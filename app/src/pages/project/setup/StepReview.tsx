@@ -81,10 +81,10 @@ export function StepReview({ project, onEdit }: { project: Project; onEdit: (s: 
           <Card title="Media" onEdit={() => onEdit("media")}>
             <div className="flex gap-2 overflow-x-auto pb-1">
               {visual.slice(0, 12).map((f) => (
-                <Thumb key={f.id} path={`${project.id}/${f.path}`} w={160} className="aspect-[9/16] w-[64px] shrink-0 rounded-lg" />
+                <Thumb key={f.id} path={`${project.id}/${f.path}`} w={160} className="aspect-[9/16] w-[64px] shrink-0 rounded-xl" />
               ))}
               {visual.length > 12 && (
-                <div className="grid aspect-[9/16] w-[64px] shrink-0 place-items-center rounded-lg bg-white/[0.04] text-[12px] text-muted-foreground">
+                <div className="grid aspect-[9/16] w-[64px] shrink-0 place-items-center rounded-xl bg-surface-2 text-[12px] text-muted-foreground">
                   +{visual.length - 12}
                 </div>
               )}
@@ -115,7 +115,7 @@ export function StepReview({ project, onEdit }: { project: Project; onEdit: (s: 
                 {filled.map(([k, label]) => (
                   <div key={k} className="contents">
                     <dt className="text-muted-foreground">{label}</dt>
-                    <dd className="whitespace-pre-wrap text-zinc-200">{Array.isArray(b[k]) ? (b[k] as string[]).join("\n") : String(b[k])}</dd>
+                    <dd className="whitespace-pre-wrap text-foreground">{Array.isArray(b[k]) ? (b[k] as string[]).join("\n") : String(b[k])}</dd>
                   </div>
                 ))}
               </dl>
@@ -126,7 +126,7 @@ export function StepReview({ project, onEdit }: { project: Project; onEdit: (s: 
         <div className="flex flex-col gap-5">
           <Card title="Content type" onEdit={() => onEdit("type")}>
             <div className="flex items-center gap-3">
-              <span className="grid size-10 place-items-center rounded-lg bg-primary/15 text-primary">
+              <span className="grid size-10 place-items-center rounded-full bg-accent text-accent-ink">
                 <meta.icon className="size-[18px]" />
               </span>
               <div className="text-[14px] font-semibold">{meta.title}</div>
@@ -137,17 +137,17 @@ export function StepReview({ project, onEdit }: { project: Project; onEdit: (s: 
               {checks.map((c) => (
                 <li key={c.text} className="flex items-start gap-2.5">
                   {c.ok ? (
-                    <Check className="mt-0.5 size-4 shrink-0 text-ok" />
+                    <Check className="mt-0.5 size-4 shrink-0 text-success-ink" />
                   ) : (
-                    <AlertTriangle className={cn("mt-0.5 size-4 shrink-0", c.warn ? "text-warn" : "text-destructive")} />
+                    <AlertTriangle className={cn("mt-0.5 size-4 shrink-0", c.warn ? "text-warn-ink" : "text-destructive")} />
                   )}
-                  <span className={c.ok ? "text-zinc-300" : "text-zinc-200"}>{c.text}</span>
+                  <span className={c.ok ? "text-ink-soft" : "text-foreground"}>{c.text}</span>
                 </li>
               ))}
             </ul>
           </Card>
           <Card title="What happens next">
-            <ol className="grid gap-3 text-[13px] text-zinc-300">
+            <ol className="grid gap-3 text-[13px] text-foreground">
               <li className="flex gap-3">
                 <MessageCircleQuestion className="mt-0.5 size-4 shrink-0 text-primary" />
                 Claude reads the brief and asks anything it needs, all at once.

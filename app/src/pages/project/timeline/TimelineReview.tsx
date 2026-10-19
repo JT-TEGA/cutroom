@@ -37,7 +37,7 @@ import { useProjectCtx } from "../ProjectLayout"
 import { Inspector } from "./Inspector"
 import { BinTile, MediaBin } from "./MediaBin"
 import { Monitor } from "./Monitor"
-import { type Selection, Track } from "./Track"
+import { type Selection, type Span, Track } from "./Track"
 
 /** Bin clips land on shots (to swap); segments land on segments (to reorder). */
 const collision: CollisionDetection = (args) => {
@@ -96,6 +96,9 @@ export function TimelineReview() {
     const o = view.overlays.find((x) => x.kind === selection.kind && x.index === selection.index)
     return o && s.start <= o.start + 0.01 && s.end > o.start
   }) : undefined) ?? shots[0]
+  // the scrubber's yellow pill: the selected label's own span, or the shot in the monitor
+  const selOverlay = selection?.type === "overlay" ? view?.overlays.find((x) => x.kind === selection.kind && x.index === selection.index) : undefined
+  const activeSpan: Span | undefined = selOverlay ?? (monitorShot ? { start: monitorShot.start, end: monitorShot.end } : undefined)
 
   const apply = useCallback(
     (next: Timeline, message?: string) => {
@@ -178,13 +181,13 @@ export function TimelineReview() {
   if (!view)
     return (
       <div className="grid gap-4 p-6">
-        <Skeleton className="h-10 w-96 bg-white/[0.04]" />
+        <Skeleton className="h-10 w-96" />
         <div className="grid grid-cols-[250px_1fr_340px] gap-4">
-          <Skeleton className="h-[440px] bg-white/[0.04]" />
-          <Skeleton className="h-[440px] bg-white/[0.04]" />
-          <Skeleton className="h-[440px] bg-white/[0.04]" />
+          <Skeleton className="h-[440px]" />
+          <Skeleton className="h-[440px]" />
+          <Skeleton className="h-[440px]" />
         </div>
-        <Skeleton className="h-60 bg-white/[0.04]" />
+        <Skeleton className="h-60" />
       </div>
     )
 
@@ -214,11 +217,11 @@ export function TimelineReview() {
     <DndContext sensors={sensors} collisionDetection={collision} onDragStart={onDragStart} onDragEnd={onDragEnd} onDragCancel={() => setDragging(null)}>
       <div className="flex h-[calc(100vh-56px)] min-h-[720px] flex-col">
         {/* action bar */}
-        <div className="flex flex-wrap items-center gap-x-6 gap-y-3 border-b border-white/[0.06] px-6 py-3.5">
+        <div className="flex flex-wrap items-center gap-x-6 gap-y-3 border-b border-border px-6 py-3.5">
           <div className="min-w-0">
             <div className="flex items-center gap-2.5">
               <h1 className="text-[17px] font-semibold tracking-[-0.01em]">Review the plan</h1>
-              <span className="rounded-md bg-white/[0.06] px-1.5 py-0.5 font-mono text-[11px] text-muted-foreground">plan v{project.plan_version}</span>
+              <span className="rounded-full bg-surface px-2 py-0.5 font-mono text-[11px] text-ink-soft shadow-soft">plan v{project.plan_version}</span>
               {save.isPending && (
                 <span className="inline-flex items-center gap-1 text-[12px] text-muted-foreground">
                   <Loader2 className="size-3 animate-spin" /> Saving
@@ -261,10 +264,10 @@ export function TimelineReview() {
 
         {/* bin · monitor · inspector */}
         <div className="grid min-h-0 flex-1 grid-cols-[236px_1fr_340px] gap-0 max-xl:grid-cols-[200px_1fr_310px]">
-          <div className="min-h-0 border-r border-white/[0.06] p-4">
+          <div className="min-h-0 border-r border-border p-4">
             <MediaBin files={files} pid={pid} used={used} />
           </div>
-          <div className="min-h-0 bg-[radial-gradient(ellipse_at_center,rgb(124_92_255/0.07),transparent_65%)] p-5">
+          <div className="min-h-0 bg-[radial-gradient(ellipse_at_center,color-mix(in_oklab,var(--accent)_35%,transparent),transparent_65%)] p-5">
             <Monitor
               view={view}
               pid={pid}
@@ -279,7 +282,7 @@ export function TimelineReview() {
               }}
             />
           </div>
-          <div className="min-h-0 overflow-y-auto border-l border-white/[0.06] p-5">
+          <div className="min-h-0 overflow-y-auto border-l border-border p-5">
             <Inspector
               view={view}
               project={project}
@@ -300,9 +303,9 @@ export function TimelineReview() {
         </div>
 
         {/* the timeline */}
-        <div className="border-t border-white/[0.06] bg-[#0b0b0e]">
+        <div className="border-t border-border bg-surface">
           <div className="flex items-center gap-4 px-5 pt-3 pb-1 text-[11.5px] text-muted-foreground">
-            <span className="font-medium text-zinc-300">Timeline</span>
+            <span className="font-medium text-foreground">Timeline</span>
             <span className="max-lg:hidden">Drag shots to reorder · drop a clip from Media onto a shot to swap · ← → to step · Delete to remove</span>
             <span className="ml-auto inline-flex items-center gap-3">
               <span className="inline-flex items-center gap-1.5">
@@ -311,21 +314,21 @@ export function TimelineReview() {
               <span className="inline-flex items-center gap-1.5">
                 <Wand2 className="size-3 text-primary" /> transition
               </span>
-              <span className="inline-flex items-center gap-1 rounded-md border border-white/[0.07] p-0.5">
-                <button className="rounded p-0.5 hover:bg-white/10" onClick={() => setPps(Math.max(16, zoom / 1.4))} aria-label="Zoom out">
+              <span className="inline-flex items-center gap-1 rounded-full bg-surface-2 p-0.5">
+                <button className="rounded-full p-1 hover:bg-ink/[0.08]" onClick={() => setPps(Math.max(16, zoom / 1.4))} aria-label="Zoom out">
                   <Minus className="size-3.5" />
                 </button>
                 <button className="px-1 font-mono text-[10.5px] hover:text-foreground" onClick={() => setPps(null)} title="Fit">
                   fit
                 </button>
-                <button className="rounded p-0.5 hover:bg-white/10" onClick={() => setPps(Math.min(240, zoom * 1.4))} aria-label="Zoom in">
+                <button className="rounded-full p-1 hover:bg-ink/[0.08]" onClick={() => setPps(Math.min(240, zoom * 1.4))} aria-label="Zoom in">
                   <Plus className="size-3.5" />
                 </button>
               </span>
             </span>
           </div>
           <div ref={scroller} className="overflow-x-auto overflow-y-hidden px-1 pt-5 pb-4" onClick={(e) => e.target === e.currentTarget && setSelection(null)}>
-            <Track view={view} pid={pid} pps={zoom} selection={selection} onSelect={setSelection} />
+            <Track view={view} pid={pid} pps={zoom} selection={selection} active={activeSpan} onSelect={setSelection} />
           </div>
         </div>
       </div>

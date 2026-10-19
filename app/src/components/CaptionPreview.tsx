@@ -61,11 +61,11 @@ export function CaptionPreview({
   const inactive = brand.caption_inactive_opacity ?? 0.6
 
   return (
-    <div className={cn("relative overflow-hidden rounded-[20px] border border-white/[0.09] bg-black shadow-[0_30px_60px_-30px_rgb(0_0_0/0.95)]", className)} style={{ aspectRatio: "9 / 16", containerType: "size" }}>
+    <div className={cn("relative overflow-hidden rounded-card bg-control shadow-lift", className)} style={{ aspectRatio: "9 / 16", containerType: "size" }}>
       {backdrop ? (
         <Thumb path={backdrop} w={540} className="absolute inset-0" imgClassName="brightness-[0.55] saturate-[0.9]" />
       ) : (
-        <div className="absolute inset-0 bg-[radial-gradient(120%_80%_at_30%_20%,#4b3a8f_0%,#1b1530_45%,#0b0a10_100%)]" />
+        <div className="absolute inset-0 bg-[radial-gradient(120%_80%_at_30%_20%,var(--ink-soft)_0%,var(--ink)_60%)]" />
       )}
       <div className="absolute inset-0 bg-gradient-to-b from-black/10 via-transparent to-black/40" />
       <div className="absolute inset-x-[7%] text-center" style={{ top: `${pos}%`, transform: "translateY(-50%)" }}>
@@ -112,7 +112,7 @@ export function CaptionPreview({
       </div>
       <div className="absolute right-[4%] bottom-[18%] flex flex-col items-center gap-[2.4cqh] opacity-50">
         {[0, 1, 2, 3].map((i) => (
-          <span key={i} className="size-[7cqw] rounded-full bg-white/30" />
+          <span key={i} className="size-[7cqw] rounded-full bg-control-ink/30" />
         ))}
       </div>
     </div>
@@ -122,8 +122,8 @@ export function CaptionPreview({
 /** The end card: the handle over a blurred last frame. */
 export function EndCardPreview({ handle, backdrop, on }: { handle: string; backdrop?: string | null; on: boolean }) {
   return (
-    <div className={cn("relative overflow-hidden rounded-xl border border-white/[0.08] transition", !on && "opacity-40 grayscale")} style={{ aspectRatio: "9 / 16", containerType: "size" }}>
-      {backdrop ? <Thumb path={backdrop} w={240} className="absolute inset-0" imgClassName="scale-110 blur-md brightness-50" /> : <div className="absolute inset-0 bg-[#1b1530]" />}
+    <div className={cn("relative overflow-hidden rounded-2xl shadow-soft transition", !on && "opacity-40 grayscale")} style={{ aspectRatio: "9 / 16", containerType: "size" }}>
+      {backdrop ? <Thumb path={backdrop} w={240} className="absolute inset-0" imgClassName="scale-110 blur-md brightness-50" /> : <div className="absolute inset-0 bg-control" />}
       <div className="absolute inset-0 grid place-items-center">
         <span className="text-[11cqw] font-bold text-white">{handle || "@handle"}</span>
       </div>

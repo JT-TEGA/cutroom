@@ -109,7 +109,7 @@ export function Monitor({
 
   return (
     <div className="flex h-full min-h-0 flex-col items-center">
-      <div className="relative min-h-0 flex-1 overflow-hidden rounded-2xl border border-white/[0.08] bg-black shadow-[0_30px_60px_-30px_rgb(0_0_0/0.9)]" style={{ aspectRatio: "9 / 16", containerType: "size" }}>
+      <div className="relative min-h-0 flex-1 overflow-hidden rounded-card bg-control shadow-lift ring-[5px] ring-surface" style={{ aspectRatio: "9 / 16", containerType: "size" }}>
         {shot.kind === "color" ? (
           <div className="absolute inset-0" style={{ background: String((view.timeline.segments[shot.segment] as { color?: string }).color ?? "#000") }} />
         ) : (
@@ -143,11 +143,11 @@ export function Monitor({
             </div>
           )}
         </div>
-        <div className="absolute top-3 right-3 rounded-md bg-black/55 px-1.5 py-0.5 font-mono text-[11px] text-zinc-200 backdrop-blur-md">#{shot.idx}</div>
+        <div className="absolute top-3 right-3 rounded-full bg-control/70 px-2 py-0.5 font-mono text-[11px] text-control-ink backdrop-blur-md">#{shot.idx}</div>
         {canPlay && (
           <button
             onClick={play}
-            className="absolute bottom-3 left-1/2 inline-flex h-8 -translate-x-1/2 items-center gap-1.5 rounded-full whitespace-nowrap border border-white/15 bg-black/60 px-3 text-[12px] font-medium text-white backdrop-blur-md transition hover:bg-black/80"
+            className="absolute bottom-3 left-1/2 inline-flex h-8 -translate-x-1/2 items-center gap-1.5 rounded-full bg-accent px-3.5 text-[12px] font-medium whitespace-nowrap text-accent-ink shadow-lift transition hover:brightness-[0.96]"
           >
             {playing ? <Pause className="size-3.5" /> : <Play className="size-3.5" />}
             {playing ? "Pause" : "Play shot"}
@@ -158,9 +158,9 @@ export function Monitor({
         <Button size="icon-sm" variant="ghost" onClick={onPrev} aria-label="Previous shot">
           <ChevronLeft />
         </Button>
-        <div className="text-center font-mono text-[11.5px] text-muted-foreground">
+        <div className="rounded-full bg-control px-3 py-1 text-center font-mono text-[11.5px] text-control-ink">
           {tc(shot.start)} → {tc(shot.end)}
-          <span className="mx-1.5 text-subtle">·</span>
+          <span className="mx-1.5 text-control-ink/60">·</span>
           {secs(shot.duration)}
         </div>
         <Button size="icon-sm" variant="ghost" onClick={onNext} aria-label="Next shot">

@@ -5,52 +5,64 @@
 
 @custom-variant dark (&:is(.dark *));
 
-/* Cutroom is dark only: near-black canvas, soft panels, one accent (violet). */
+/* Cutroom "Butter": a warm cream canvas, soft rounded panels, warm greys, black pill controls and butter yellow for
+   whatever is active. These are the only raw colours in the app UI: components use the tokens below (or the shadcn
+   names mapped onto them), never their own hex values. The video's own look (caption colours, stickers) comes from
+   brand.md and is not part of this theme. Every text token meets WCAG AA (4.5:1) on --bg, --surface and --surface-2. */
 :root {
-  --radius: 0.75rem;
+  --radius: 1rem;
 
-  --background: #08080a;
-  --foreground: #ededf0;
-  --card: #111114;
-  --card-foreground: #ededf0;
-  --popover: #141418;
-  --popover-foreground: #ededf0;
-  --primary: #7c5cff;
-  --primary-foreground: #ffffff;
-  --secondary: #1b1b21;
-  --secondary-foreground: #ededf0;
-  --muted: #17171c;
-  --muted-foreground: #8b8b97;
-  --accent: #1e1e25;
-  --accent-foreground: #ededf0;
-  --destructive: #f2555a;
-  --border: #212128;
-  --input: #26262e;
-  --ring: #7c5cff;
+  /* the palette */
+  --bg: #efeed2;
+  --surface: #fbfaf2;
+  --surface-2: #eae8d6;
+  --ink: #17160f;
+  --ink-soft: #5b594e;          /* secondary text: 5.98:1 on bg, 6.72:1 on surface */
+  --ink-faint: #67655a;         /* tertiary text (timestamps, counts): 4.74:1 on surface-2 */
+  --border: #d9d7c2;
+  --accent: #e8ea5c;
+  --accent-ink: #17160f;        /* 14.1:1 on accent */
+  --accent-soft: #f3f4b4;       /* a selected card: accent at ~40% on surface */
+  --control: #17160f;
+  --control-ink: #fbfaf2;       /* 17.3:1 on control */
+  --control-hover: #33312a;
+  --success: #3fae6b;           /* dots and fills only; text uses --success-ink */
+  --success-ink: #1b6e3e;
+  --warn: #e0a526;
+  --warn-ink: #835500;
+  --info: #3b82c4;
+  --info-ink: #1f5f99;
+  --danger: #ae321c;            /* fills and text: 5.45:1 on bg */
 
-  --subtle: #5d5d68;
-  --panel: #0d0d10;
-  --elevated: #18181d;
-  --brand-soft: rgb(124 92 255 / 0.14);
-  --brand-line: rgb(124 92 255 / 0.4);
-  --ok: #3ddc97;
-  --warn: #f5b84a;
-  --info: #5cc8ff;
+  /* shadcn's names, mapped onto the palette */
+  --background: var(--bg);
+  --foreground: var(--ink);
+  --card: var(--surface);
+  --card-foreground: var(--ink);
+  --popover: var(--surface);
+  --popover-foreground: var(--ink);
+  --primary: var(--control);
+  --primary-foreground: var(--control-ink);
+  --secondary: var(--surface-2);
+  --secondary-foreground: var(--ink);
+  --muted: var(--surface-2);
+  --muted-foreground: var(--ink-soft);
+  --accent-foreground: var(--accent-ink);
+  --destructive: var(--danger);
+  --input: var(--border);
+  --ring: var(--ink);
 
-  --chart-1: #7c5cff;
-  --chart-2: #5cc8ff;
-  --chart-3: #3ddc97;
-  --chart-4: #f5b84a;
-  --chart-5: #f2555a;
+  --subtle: var(--ink-faint);
+  --ok: var(--success);
 
-  --sidebar: #0b0b0e;
-  --sidebar-foreground: #ededf0;
-  --sidebar-primary: #7c5cff;
-  --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: #17171c;
-  --sidebar-accent-foreground: #ededf0;
-  --sidebar-border: #1a1a20;
-  --sidebar-ring: #7c5cff;
+  --sidebar: var(--surface);
+  --sidebar-foreground: var(--ink);
+  --sidebar-primary: var(--control);
+  --sidebar-primary-foreground: var(--control-ink);
+  --sidebar-accent: var(--accent);
+  --sidebar-accent-foreground: var(--accent-ink);
+  --sidebar-border: var(--border);
+  --sidebar-ring: var(--ink);
 }
 
 @theme inline {
@@ -84,18 +96,33 @@
   --color-input: var(--input);
   --color-ring: var(--ring);
   --color-subtle: var(--subtle);
-  --color-panel: var(--panel);
-  --color-elevated: var(--elevated);
-  --color-brand-soft: var(--brand-soft);
-  --color-brand-line: var(--brand-line);
   --color-ok: var(--ok);
   --color-warn: var(--warn);
   --color-info: var(--info);
-  --color-chart-1: var(--chart-1);
-  --color-chart-2: var(--chart-2);
-  --color-chart-3: var(--chart-3);
-  --color-chart-4: var(--chart-4);
-  --color-chart-5: var(--chart-5);
+
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-ink: var(--ink);
+  --color-ink-soft: var(--ink-soft);
+  --color-ink-faint: var(--ink-faint);
+  --color-accent-ink: var(--accent-ink);
+  --color-accent-soft: var(--accent-soft);
+  --color-control: var(--control);
+  --color-control-ink: var(--control-ink);
+  --color-control-hover: var(--control-hover);
+  --color-success: var(--success);
+  --color-success-ink: var(--success-ink);
+  --color-warn-ink: var(--warn-ink);
+  --color-info-ink: var(--info-ink);
+  --color-danger: var(--danger);
+
+  /* cards ~22px; buttons, chips, nav items and pills are fully rounded */
+  --radius-card: 1.375rem;
+  /* soft, warm, low shadows (tinted with --ink) instead of hard borders */
+  --shadow-soft: 0 1px 2px rgb(23 22 15 / 0.04), 0 6px 18px -8px rgb(23 22 15 / 0.12);
+  --shadow-lift: 0 2px 6px rgb(23 22 15 / 0.05), 0 22px 44px -18px rgb(23 22 15 / 0.24);
+  --shadow-pill: 0 1px 2px rgb(23 22 15 / 0.18), 0 6px 14px -6px rgb(23 22 15 / 0.35);
   --color-sidebar: var(--sidebar);
   --color-sidebar-foreground: var(--sidebar-foreground);
   --color-sidebar-primary: var(--sidebar-primary);
@@ -124,7 +151,7 @@
     @apply border-border outline-ring/50;
   }
   html {
-    color-scheme: dark;
+    color-scheme: light;
   }
   body {
     @apply bg-background text-foreground antialiased;
@@ -132,11 +159,12 @@
     font-size: 14px;
   }
   ::selection {
-    background: rgb(124 92 255 / 0.35);
+    background: var(--accent);
+    color: var(--accent-ink);
   }
   * {
     scrollbar-width: thin;
-    scrollbar-color: #2a2a32 transparent;
+    scrollbar-color: color-mix(in oklab, var(--ink) 22%, transparent) transparent;
   }
   button:not(:disabled),
   [role="button"]:not(:disabled) {
@@ -145,27 +173,19 @@
 }
 
 @layer components {
-  /* a panel: soft surface, hairline border, faint top highlight */
+  /* a panel: a soft, rounded surface lifted off the canvas by a low shadow (no hard border) */
   .panel {
-    @apply rounded-xl border bg-card;
-    box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.03);
+    @apply rounded-card bg-card shadow-soft;
   }
   .eyebrow {
     @apply text-[11px] font-medium tracking-[0.08em] text-muted-foreground uppercase;
   }
   .shimmer-text {
-    background: linear-gradient(90deg, #8b8b97 0%, #f4f2ff 45%, #b3a3ff 55%, #8b8b97 100%);
+    background: linear-gradient(90deg, var(--ink-soft) 0%, var(--ink) 45%, var(--ink) 55%, var(--ink-soft) 100%);
     background-size: 200% 100%;
     -webkit-background-clip: text;
     background-clip: text;
     color: transparent;
     @apply animate-shimmer;
-  }
-  .checker {
-    background-image:
-      linear-gradient(45deg, #121216 25%, transparent 25%), linear-gradient(-45deg, #121216 25%, transparent 25%),
-      linear-gradient(45deg, transparent 75%, #121216 75%), linear-gradient(-45deg, transparent 75%, #121216 75%);
-    background-size: 16px 16px;
-    background-position: 0 0, 0 8px, 8px -8px, -8px 0;
   }
 }

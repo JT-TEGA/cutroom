@@ -42,14 +42,14 @@ function EditableName({ project }: { project: Project }) {
             setEditing(false)
           }
         }}
-        className="h-8 w-72 rounded-md border border-primary/50 bg-white/[0.04] px-2 text-[17px] font-semibold tracking-[-0.01em] outline-none"
+        className="h-8 w-72 rounded-full border border-ink/50 bg-surface px-3 text-[17px] font-semibold tracking-[-0.01em] outline-none"
       />
     )
   return (
     <button
       onClick={() => setEditing(true)}
       title="Rename"
-      className="-mx-2 h-8 truncate rounded-md px-2 text-[17px] font-semibold tracking-[-0.01em] transition hover:bg-white/[0.05]"
+      className="-mx-3 h-8 truncate rounded-full px-3 text-[17px] font-semibold tracking-[-0.01em] transition hover:bg-ink/[0.05]"
     >
       {project.name}
     </button>
@@ -65,21 +65,21 @@ function Tabs({ project }: { project: Project }) {
   ]
   const { pathname } = useLocation()
   return (
-    <div className="flex h-9 items-center rounded-lg border border-white/[0.07] bg-white/[0.02] p-1">
+    <div className="flex h-9 items-center rounded-full bg-surface p-1 shadow-soft">
       {tabs.map((t) =>
         t.enabled ? (
           <NavLink
             key={t.label}
             to={t.to}
             className={cn(
-              "h-7 rounded-md px-3 text-[13px] leading-7 font-medium text-muted-foreground transition-colors hover:text-foreground",
-              pathname.includes(t.match) && "bg-white/[0.08] text-foreground",
+              "h-7 rounded-full px-3.5 text-[13px] leading-7 font-medium text-ink-soft transition-colors hover:text-foreground",
+              pathname.includes(t.match) && "bg-accent text-accent-ink hover:text-accent-ink",
             )}
           >
             {t.label}
           </NavLink>
         ) : (
-          <span key={t.label} className="h-7 px-3 text-[13px] leading-7 font-medium text-subtle/70">
+          <span key={t.label} className="h-7 px-3.5 text-[13px] leading-7 font-medium text-subtle">
             {t.label}
           </span>
         ),
@@ -93,11 +93,11 @@ function JobPill({ job, pid }: { job: Job; pid: string }) {
   return (
     <Link
       to={`/projects/${pid}/jobs/${job.id}`}
-      className="inline-flex h-9 items-center gap-2 rounded-lg border border-primary/30 bg-primary/10 px-3 text-[13px] font-medium text-violet-100 transition hover:bg-primary/15"
+      className="inline-flex h-9 items-center gap-2 rounded-full bg-accent px-3.5 text-[13px] font-medium text-accent-ink shadow-soft transition hover:brightness-[0.96]"
     >
       <Loader2 className="size-3.5 animate-spin" />
       {copy?.title ?? job.kind}
-      <span className="font-mono text-[12px] text-violet-200/70">{Math.round(job.progress)}%</span>
+      <span className="font-mono text-[12px]">{Math.round(job.progress)}%</span>
     </Link>
   )
 }
@@ -114,8 +114,8 @@ export function ProjectLayout() {
   if (project.isLoading)
     return (
       <Page wide>
-        <Skeleton className="mb-8 h-9 w-80 bg-white/[0.04]" />
-        <Skeleton className="h-[480px] w-full rounded-2xl bg-white/[0.04]" />
+        <Skeleton className="mb-8 h-9 w-80" />
+        <Skeleton className="h-[480px] w-full rounded-2xl" />
       </Page>
     )
   if (project.error || !project.data)
@@ -135,7 +135,7 @@ export function ProjectLayout() {
 
   return (
     <div className="flex min-h-full flex-col">
-      <header className="sticky top-0 z-30 border-b border-white/[0.06] bg-[#08080a]/80 backdrop-blur-xl">
+      <header className="sticky top-0 z-30 border-b border-border bg-background/85 backdrop-blur-xl">
         <div className="mx-auto flex h-14 max-w-[1600px] items-center gap-3 px-8 max-xl:px-6">
           <Link to="/" className="text-[13.5px] text-muted-foreground transition hover:text-foreground">
             Projects
@@ -155,7 +155,7 @@ export function ProjectLayout() {
 
       {err?.message && p.status === "error" && !onJobPage && hideError !== errKey && (
         <div className="mx-auto mt-4 w-full max-w-[1600px] px-8 max-xl:px-6">
-          <div className="flex items-start gap-3 rounded-xl border border-destructive/25 bg-destructive/[0.06] px-4 py-3">
+          <div className="flex items-start gap-3 rounded-card border border-destructive/25 bg-destructive/[0.06] px-5 py-3.5">
             <AlertTriangle className="mt-0.5 size-4 shrink-0 text-destructive" />
             <div className="min-w-0 flex-1">
               <div className="text-[13.5px] font-medium">{err.message}</div>
@@ -170,7 +170,7 @@ export function ProjectLayout() {
                 <RotateCw /> Retry {failedJob.kind}
               </Button>
             )}
-            <button onClick={() => setHideError(errKey)} className="rounded p-1 text-muted-foreground hover:text-foreground">
+            <button onClick={() => setHideError(errKey)} className="rounded-full p-1 text-muted-foreground hover:bg-ink/[0.06] hover:text-foreground">
               <X className="size-3.5" />
             </button>
           </div>

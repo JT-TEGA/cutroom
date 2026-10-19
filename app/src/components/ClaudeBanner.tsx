@@ -24,11 +24,11 @@ function CopyCommand({ command }: { command: string }) {
         setDone(true)
         setTimeout(() => setDone(false), 1500)
       }}
-      className="inline-flex h-7 items-center gap-2 rounded-md border border-amber-200/15 bg-black/40 px-2.5 font-mono text-[12px] text-amber-50 transition hover:bg-black/60"
+      className="inline-flex h-7 items-center gap-2 rounded-full bg-control px-3 font-mono text-[12px] text-control-ink transition hover:bg-control-hover"
     >
-      <span className="text-amber-200/50">$</span>
+      <span className="text-control-ink/60">$</span>
       {command}
-      {done ? <Check className="size-3.5 text-ok" /> : <Copy className="size-3.5 opacity-60" />}
+      {done ? <Check className="size-3.5 text-success" /> : <Copy className="size-3.5 opacity-60" />}
     </button>
   )
 }
@@ -106,16 +106,16 @@ export function ClaudeBanner() {
           exit={{ height: 0, opacity: 0 }}
           className="overflow-hidden"
         >
-          <div className="mx-6 mt-4 flex items-start gap-3 rounded-xl border border-amber-300/15 bg-gradient-to-r from-amber-400/[0.09] to-amber-400/[0.03] px-4 py-3">
-            <p.icon className="mt-0.5 size-4.5 shrink-0 text-warn" />
+          <div className="mx-6 mt-4 flex items-start gap-3 rounded-card bg-accent-soft px-5 py-3.5 shadow-soft">
+            <p.icon className="mt-0.5 size-4.5 shrink-0 text-warn-ink" />
             <div className="min-w-0 flex-1">
-              <div className="text-[13.5px] font-semibold text-amber-50">{p.title}</div>
-              <div className="mt-0.5 text-[13px] text-amber-100/70">{p.body}</div>
+              <div className="text-[13.5px] font-semibold text-foreground">{p.title}</div>
+              <div className="mt-0.5 text-[13px] text-ink-soft">{p.body}</div>
               {(p.command || p.settingsLink) && (
                 <div className="mt-2.5 flex flex-wrap items-center gap-2">
                   {p.command && <CopyCommand command={p.command} />}
                   {p.settingsLink && (
-                    <Button asChild size="xs" variant="outline" className="border-amber-200/15">
+                    <Button asChild size="xs" variant="outline">
                       <Link to="/settings">Open Settings</Link>
                     </Button>
                   )}
@@ -125,7 +125,7 @@ export function ClaudeBanner() {
             <Button
               size="xs"
               variant="ghost"
-              className="text-amber-100/80"
+              className="text-foreground"
               onClick={() => {
                 clearBrainIssue()
                 status.refetch()
@@ -136,7 +136,7 @@ export function ClaudeBanner() {
             <button
               aria-label="Dismiss"
               onClick={() => setDismissed(p.key)}
-              className="rounded p-1 text-amber-100/50 hover:bg-white/5 hover:text-amber-50"
+              className="rounded-full p-1 text-ink-soft hover:bg-ink/[0.06] hover:text-foreground"
             >
               <X className="size-3.5" />
             </button>

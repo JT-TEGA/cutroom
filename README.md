@@ -115,28 +115,30 @@ http://127.0.0.1:8000/docs).
 |---|---|
 | ![Projects](docs/screenshots/01-projects.jpg) | ![New video: content type](docs/screenshots/02-new-video.jpg) |
 | **Projects**: every video with its status (draft, planning, needs review, rendering, done), live progress, search and a filter by content type | **New video, step 1**: the content type, grouped Lifestyle / Fashion / Gym |
-| ![Media](docs/screenshots/03-media.jpg) | ![The idea](docs/screenshots/04-idea.jpg) |
-| **Step 2, media**: drop clips and photos, a voice memo and a track; drag to reorder, click a name to rename it | **Step 3, the idea**: the brief as a form that autosaves; the preset's defaults are the placeholders, advanced fields fold away |
-| ![The song](docs/screenshots/03b-music.jpg) | ![Import from Photos](docs/screenshots/03c-photos.jpg) |
-| **The song**: the waveform with the part the edit uses lit up (auto: just before the drop, or the strongest stretch), drag or slide to pick your own start, play from there; "I'll add this song in Instagram/TikTok when posting" | **Import from Photos**: albums, recents, favourites and videos from the Mac Photos app, multi-select across albums, a date filter, Live Photos as still or video, iCloud-only items downloaded on import |
-| ![Photos access](docs/screenshots/03d-photos-access.jpg) | ![Post with the in-app sound](docs/screenshots/21-result-in-app.jpg) |
-| **No access yet?** The exact System Settings steps for the app Cutroom runs from, and Check again | **Post with the in-app sound**: the song and the second to start it at, the file to post (no music) and the preview with music; a reminder to turn the song down when you talk |
-| ![Review](docs/screenshots/05-review.jpg) | ![Claude reading the brief](docs/screenshots/06-claude-reading.jpg) |
-| **Step 4, review**: checks and what happens next | **Claude reads the brief** (live over the job WebSocket) |
-| ![Questions](docs/screenshots/07-questions.jpg) | ![Planning progress](docs/screenshots/08-plan-progress.jpg) |
-| **Questions**: anything Claude needs, asked once, with suggested answers and the assumptions it will make | **Planning**: each stage of the pipeline, the progress bar and the log |
-| ![Claude is planning](docs/screenshots/09-claude-planning.jpg) | ![A shot and its reason](docs/screenshots/11-timeline-shot.jpg) |
-| **Claude is planning…** while the brain call runs | **Timeline review**: click a shot for the reason it's there, the words heard over it, its transition; swap or delete it |
-| ![Editing a label](docs/screenshots/12-timeline-text.jpg) | ![Rendering](docs/screenshots/13-render.jpg) |
-| **Labels**: edit the text and style; drag shots to reorder, drop a clip from Media onto a shot to swap it, ⌘Z to undo | **Rendering**: live progress per stage |
-| ![Result](docs/screenshots/14-result.jpg) | ![Version 2](docs/screenshots/16-result-v2.jpg) |
-| **Result**: the 9:16 player, Download, Open in Finder, request changes, the contact sheet | **Version 2** after “make the first label say 5AM and use flash cuts”: versions side by side |
-| ![Settings](docs/screenshots/17-settings.jpg) | ![Brain settings](docs/screenshots/17b-settings-brain.jpg) |
-| **Settings**: handle, colours, captions with a live preview in the real font, music levels, end card | **Brain**: Claude Code or the Anthropic API, with connection status and the system check |
-| ![Presets](docs/screenshots/18-presets.jpg) | ![Usage limit](docs/screenshots/19-usage-limit.jpg) |
-| **Presets**: each content type's notes and defaults, editable | **When Claude can't work** (usage limit, logged out, not installed, no API key) a banner says what to do |
-| ![Claude revising](docs/screenshots/15-claude-revising.jpg) | ![Error screen](docs/screenshots/20-error-screen.jpg) |
-| **Revising**: your notes go to Claude, then straight to a new render | **If a screen ever crashes**: a calm error screen inside the app with Go back / Reload and the technical details folded away |
+| ![Media, nothing added yet](docs/screenshots/03a-media-empty.jpg) | ![Media](docs/screenshots/03-media.jpg) |
+| **Step 2, before the first clip**: clips & photos is the one required card (Browse, or Import from Photos), voiceover and music are optional; the edit order waits as a slim bar and Continue stays off until there is a clip or photo | **Step 2, media**: drop clips and photos, a voice memo and a track; drag to reorder, click a name to rename it |
+| ![The idea](docs/screenshots/04-idea.jpg) | ![The song](docs/screenshots/03b-music.jpg) |
+| **Step 3, the idea**: the brief as a form that autosaves; the preset's defaults are the placeholders, advanced fields fold away | **The song**: the waveform with the part the edit uses lit up (auto: just before the drop, or the strongest stretch), drag or slide to pick your own start, play from there; "I'll add this song in Instagram/TikTok when posting" |
+| ![Import from Photos](docs/screenshots/03c-photos.jpg) | ![Photos access](docs/screenshots/03d-photos-access.jpg) |
+| **Import from Photos**: albums, recents, favourites and videos from the Mac Photos app, multi-select across albums, a date filter, Live Photos as still or video, iCloud-only items downloaded on import | **No access yet?** The exact System Settings steps for the app Cutroom runs from, and Check again |
+| ![Post with the in-app sound](docs/screenshots/21-result-in-app.jpg) | ![Review](docs/screenshots/05-review.jpg) |
+| **Post with the in-app sound**: the song and the second to start it at, the file to post (no music) and the preview with music; a reminder to turn the song down when you talk | **Step 4, review**: checks and what happens next |
+| ![Claude reading the brief](docs/screenshots/06-claude-reading.jpg) | ![Questions](docs/screenshots/07-questions.jpg) |
+| **Claude reads the brief** (live over the job WebSocket) | **Questions**: anything Claude needs, asked once, with suggested answers and the assumptions it will make |
+| ![Planning progress](docs/screenshots/08-plan-progress.jpg) | ![Claude is planning](docs/screenshots/09-claude-planning.jpg) |
+| **Planning**: each stage of the pipeline, the progress bar and the log | **Claude is planning…** while the brain call runs |
+| ![A shot and its reason](docs/screenshots/11-timeline-shot.jpg) | ![Editing a label](docs/screenshots/12-timeline-text.jpg) |
+| **Timeline review**: click a shot for the reason it's there, the words heard over it, its transition; swap or delete it | **Labels**: edit the text and style; drag shots to reorder, drop a clip from Media onto a shot to swap it, ⌘Z to undo |
+| ![Rendering](docs/screenshots/13-render.jpg) | ![Result](docs/screenshots/14-result.jpg) |
+| **Rendering**: live progress per stage | **Result**: the 9:16 player, Download, Open in Finder, request changes, the contact sheet |
+| ![Version 2](docs/screenshots/16-result-v2.jpg) | ![Settings](docs/screenshots/17-settings.jpg) |
+| **Version 2** after “make the first label say 5AM and use flash cuts”: versions side by side | **Settings**: handle, colours, captions with a live preview in the real font, music levels, end card |
+| ![Brain settings](docs/screenshots/17b-settings-brain.jpg) | ![Presets](docs/screenshots/18-presets.jpg) |
+| **Brain**: Claude Code or the Anthropic API, with connection status and the system check | **Presets**: each content type's notes and defaults, editable |
+| ![Usage limit](docs/screenshots/19-usage-limit.jpg) | ![Claude revising](docs/screenshots/15-claude-revising.jpg) |
+| **When Claude can't work** (usage limit, logged out, not installed, no API key) a banner says what to do | **Revising**: your notes go to Claude, then straight to a new render |
+| ![Error screen](docs/screenshots/20-error-screen.jpg) |  |
+| **If a screen ever crashes**: a calm error screen inside the app with Go back / Reload and the technical details folded away |  |
 
 The screenshots come from a real end-to-end run against `./cutroom --demo`: synthetic footage, a `say` voice memo
 and a generated beat track went through the wizard, the pipeline (transcription, voice clean-up, beat detection,

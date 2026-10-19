@@ -24,22 +24,22 @@ export function Stepper({ current, onPick, done }: { current: StepId; onPick?: (
         const clickable = !!onPick && !active
         return (
           <li key={s.id} className="flex items-center gap-2">
-            {i > 0 && <span className={cn("h-px w-8 bg-white/10 max-lg:w-4", i <= at && "bg-primary/50")} />}
+            {i > 0 && <span className={cn("h-px w-8 bg-ink/15 max-lg:w-4", i <= at && "bg-ink/60")} />}
             <button
               disabled={!clickable}
               onClick={() => onPick?.(s.id)}
               className={cn(
-                "flex items-center gap-2 rounded-full py-1 pr-3 pl-1 text-[13px] font-medium transition-colors",
-                active ? "bg-white/[0.06] text-foreground" : "text-muted-foreground",
+                "flex items-center gap-2 rounded-full py-1 pr-3.5 pl-1 text-[13px] font-medium transition-colors",
+                active ? "bg-accent text-accent-ink" : "text-ink-soft",
                 clickable && "hover:text-foreground",
               )}
             >
               <span
                 className={cn(
                   "grid size-6 place-items-center rounded-full border text-[11.5px] tabular-nums",
-                  active && "border-primary bg-primary text-white shadow-[0_0_14px_-2px_rgb(124_92_255/0.8)]",
-                  complete && "border-primary/40 bg-primary/15 text-primary",
-                  !active && !complete && "border-white/10",
+                  active && "border-control bg-control text-control-ink",
+                  complete && "border-ink/70 bg-surface text-foreground",
+                  !active && !complete && "border-ink/20",
                 )}
               >
                 {complete ? <Check className="size-3.5" /> : i + 1}
@@ -60,7 +60,7 @@ export function ContentTypePicker({ value, onChange }: { value: string | null | 
     return (
       <div className="grid grid-cols-3 gap-6 max-lg:grid-cols-1">
         {[0, 1, 2].map((i) => (
-          <Skeleton key={i} className="h-72 rounded-2xl bg-white/[0.04]" />
+          <Skeleton key={i} className="h-72 rounded-card" />
         ))}
       </div>
     )
@@ -91,16 +91,14 @@ export function ContentTypePicker({ value, onChange }: { value: string | null | 
                   transition={{ delay: 0.03 * (gi * 4 + i) }}
                   onClick={() => onChange(p.name)}
                   className={cn(
-                    "group relative flex items-start gap-3.5 overflow-hidden rounded-xl border bg-card p-3.5 text-left transition",
-                    sel
-                      ? "border-primary/70 bg-primary/[0.07] shadow-[0_0_0_1px_rgb(124_92_255/0.35),0_10px_30px_-12px_rgb(124_92_255/0.5)]"
-                      : "border-white/[0.06] hover:border-white/[0.14] hover:bg-[#141418]",
+                    "group relative flex items-start gap-3.5 overflow-hidden rounded-2xl bg-card p-3.5 text-left shadow-soft transition",
+                    sel ? "bg-accent-soft ring-[1.5px] ring-ink" : "hover:-translate-y-px hover:shadow-lift",
                   )}
                 >
                   <span
                     className={cn(
-                      "grid size-10 shrink-0 place-items-center rounded-lg border transition",
-                      sel ? "border-primary/40 bg-primary/20 text-white" : "border-white/[0.07] bg-white/[0.03] text-primary",
+                      "grid size-10 shrink-0 place-items-center rounded-full transition",
+                      sel ? "bg-accent text-accent-ink" : "bg-surface-2 text-foreground",
                     )}
                   >
                     <m.icon className="size-[18px]" />
@@ -112,7 +110,7 @@ export function ContentTypePicker({ value, onChange }: { value: string | null | 
                   <span
                     className={cn(
                       "mt-0.5 grid size-5 shrink-0 place-items-center rounded-full border transition",
-                      sel ? "border-primary bg-primary text-white" : "border-white/15 opacity-0 group-hover:opacity-100",
+                      sel ? "border-control bg-control text-control-ink" : "border-ink/25 opacity-0 group-hover:opacity-100",
                     )}
                   >
                     {sel && <Check className="size-3" />}
@@ -130,7 +128,7 @@ export function ContentTypePicker({ value, onChange }: { value: string | null | 
 /** The wizard's sticky footer: back, a hint, continue. */
 export function WizardFooter({ left, hint, right }: { left?: ReactNode; hint?: ReactNode; right?: ReactNode }) {
   return (
-    <div className="sticky bottom-0 z-20 -mx-8 mt-10 border-t border-white/[0.06] bg-[#08080a]/85 px-8 py-4 backdrop-blur-xl max-xl:-mx-6 max-xl:px-6">
+    <div className="sticky bottom-0 z-20 -mx-8 mt-10 border-t border-border bg-background/85 px-8 py-4 backdrop-blur-xl max-xl:-mx-6 max-xl:px-6">
       <div className="flex items-center gap-4">
         <div className="flex-1">{left}</div>
         {hint && <div className="text-[12.5px] text-muted-foreground max-md:hidden">{hint}</div>}

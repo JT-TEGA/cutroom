@@ -86,7 +86,7 @@ function Waveform({
       className={cn("relative h-[84px] touch-none select-none", !fixed && "cursor-pointer")}
     >
       <div
-        className="absolute inset-y-0 rounded-md border border-primary/50 bg-primary/[0.09]"
+        className="absolute inset-y-0 rounded-xl bg-accent/55 ring-1 ring-ink/25"
         style={{ left: x(start), width: x(len) }}
       />
       <div className="absolute inset-0 flex items-center gap-[2px] px-px">
@@ -96,7 +96,7 @@ function Waveform({
           return (
             <span
               key={i}
-              className={cn("min-w-0 flex-1 rounded-full transition-colors", lit ? "bg-primary" : "bg-white/[0.16]")}
+              className={cn("min-w-0 flex-1 rounded-full transition-colors", lit ? "bg-ink" : "bg-ink/15")}
               style={{ height: `${Math.round(v * 86)}%` }}
             />
           )
@@ -104,11 +104,11 @@ function Waveform({
       </div>
       {m.drops.map((d) => (
         <div key={d} className="pointer-events-none absolute inset-y-0" style={{ left: x(d) }} title={`drop at ${clock(d)}`}>
-          <div className="h-full w-px bg-amber-300/70" />
-          <span className="absolute -top-0.5 left-1 rounded bg-amber-300/15 px-1 text-[10px] font-medium text-amber-200">drop</span>
+          <div className="h-full w-px bg-warn" />
+          <span className="absolute -top-0.5 left-1 rounded-full bg-surface px-1.5 text-[10px] font-medium text-warn-ink shadow-soft">drop</span>
         </div>
       ))}
-      {playhead != null && <div className="pointer-events-none absolute inset-y-0 w-0.5 rounded bg-white" style={{ left: x(playhead) }} />}
+      {playhead != null && <div className="pointer-events-none absolute inset-y-0 w-0.5 rounded bg-info" style={{ left: x(playhead) }} />}
     </div>
   )
 }
@@ -186,13 +186,13 @@ export function MusicPanel({ project, file }: { project: Project; file: ProjectF
 
       {music.isLoading ? (
         <div className="grid gap-3">
-          <Skeleton className="h-[84px] rounded-md bg-white/[0.04]" />
+          <Skeleton className="h-[84px] rounded-xl" />
           <div className="flex items-center gap-2 text-[12.5px] text-muted-foreground">
             <Loader2 className="size-3.5 animate-spin" /> Finding the beat…
           </div>
         </div>
       ) : music.error || !m ? (
-        <div className="flex items-center justify-between gap-3 rounded-lg border border-white/[0.06] px-4 py-3 text-[12.5px] text-muted-foreground">
+        <div className="flex items-center justify-between gap-3 rounded-2xl bg-surface-2/60 px-4 py-3 text-[12.5px] text-muted-foreground">
           <span>Couldn't read this track{music.error ? `: ${(music.error as Error).message}` : ""}.</span>
           <button onClick={() => music.refetch()} className="text-foreground underline-offset-2 hover:underline">
             Try again
@@ -203,7 +203,7 @@ export function MusicPanel({ project, file }: { project: Project; file: ProjectF
           <div className="flex items-center gap-4">
             <button
               onClick={toggle}
-              className="grid size-10 shrink-0 place-items-center rounded-full bg-primary text-white shadow-[0_0_18px_-4px_rgb(124_92_255/0.8)] transition hover:brightness-110"
+              className="grid size-10 shrink-0 place-items-center rounded-full bg-control text-control-ink shadow-pill transition hover:bg-control-hover"
               aria-label={playing ? "Pause" : "Play from the start point"}
             >
               {playing ? <Pause className="size-4" /> : <Play className="size-4 translate-x-px" />}
@@ -218,7 +218,7 @@ export function MusicPanel({ project, file }: { project: Project; file: ProjectF
             <div className="min-w-0 flex-1">
               <div className="flex flex-wrap items-baseline gap-x-2 text-[13.5px]">
                 <span className="text-muted-foreground">Starts at</span>
-                <span className="font-mono text-[17px] font-semibold text-white" data-testid="music-start">
+                <span className="font-mono text-[17px] font-semibold text-foreground" data-testid="music-start">
                   {clock(start)}
                 </span>
                 <span className="text-muted-foreground">to {clock(end)}</span>
@@ -238,7 +238,7 @@ export function MusicPanel({ project, file }: { project: Project; file: ProjectF
             {chosen != null && (
               <button
                 onClick={() => commit(null)}
-                className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg border border-white/[0.08] px-3 text-[12.5px] text-zinc-300 transition hover:bg-white/[0.05]"
+                className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full border border-ink/80 px-3 text-[12.5px] font-medium text-foreground transition hover:bg-ink/[0.05]"
               >
                 <RotateCcw className="size-3.5" /> Auto
               </button>
@@ -268,8 +268,8 @@ export function MusicPanel({ project, file }: { project: Project; file: ProjectF
 
       <label
         className={cn(
-          "mt-5 flex cursor-pointer items-start gap-3 rounded-xl border px-4 py-3.5 transition",
-          inApp ? "border-primary/45 bg-primary/[0.07]" : "border-white/[0.07] hover:border-white/15",
+          "mt-5 flex cursor-pointer items-start gap-3 rounded-2xl px-4 py-3.5 transition",
+          inApp ? "bg-accent-soft ring-1 ring-ink/70" : "bg-surface-2/60 hover:bg-surface-2",
         )}
       >
         <Smartphone className="mt-0.5 size-4 shrink-0 text-primary" />

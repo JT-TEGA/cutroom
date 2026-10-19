@@ -47,7 +47,7 @@ const KINDS = [
 function PhotoThumb({ id, w = 240, className }: { id: string | null | undefined; w?: number; className?: string }) {
   const [state, setState] = useState<"loading" | "ok" | "error">("loading")
   return (
-    <div className={cn("relative overflow-hidden bg-[#141418]", className)}>
+    <div className={cn("relative overflow-hidden bg-surface-2", className)}>
       {id && state !== "error" && (
         <img
           src={photoThumbUrl(id, w)}
@@ -59,7 +59,7 @@ function PhotoThumb({ id, w = 240, className }: { id: string | null | undefined;
           className={cn("size-full object-cover transition-opacity duration-300", state === "ok" ? "opacity-100" : "opacity-0")}
         />
       )}
-      {state === "loading" && id && <div className="absolute inset-0 animate-pulse bg-gradient-to-br from-white/[0.05] to-transparent" />}
+      {state === "loading" && id && <div className="absolute inset-0 animate-pulse bg-gradient-to-br from-ink/[0.05] to-transparent" />}
       {(!id || state === "error") && (
         <div className="absolute inset-0 grid place-items-center text-subtle">
           <ImageIcon className="size-4" />
@@ -77,7 +77,7 @@ function AccessHelp({ st, onCheck, checking }: { st: PhotosStatus; onCheck: () =
   const denied = st.state === "no_access"
   return (
     <div className="mx-auto flex max-w-[560px] flex-col items-center py-8 text-center" data-testid="photos-access">
-      <span className="mb-4 grid size-12 place-items-center rounded-2xl border border-white/[0.08] bg-white/[0.04] text-primary">
+      <span className="mb-4 grid size-12 place-items-center rounded-full bg-accent text-accent-ink">
         {denied ? <FolderLock className="size-5" /> : <AlertTriangle className="size-5" />}
       </span>
       <h2 className="text-[19px] font-semibold tracking-[-0.01em]">
@@ -93,7 +93,7 @@ function AccessHelp({ st, onCheck, checking }: { st: PhotosStatus; onCheck: () =
           {[
             <>
               Open <b>System Settings → Privacy &amp; Security → Full Disk Access</b>.{" "}
-              <button onClick={() => open.mutate("full_disk_access")} className="text-primary underline-offset-2 hover:underline">
+              <button onClick={() => open.mutate("full_disk_access")} className="font-medium text-foreground underline decoration-ink/30 underline-offset-2 hover:decoration-ink">
                 Open it for me
               </button>
             </>,
@@ -101,17 +101,17 @@ function AccessHelp({ st, onCheck, checking }: { st: PhotosStatus; onCheck: () =
               Turn on <b>{app}</b>. If it isn't in the list, click <b>+</b> and pick it from {where}.
             </>,
             <>
-              Quit <b>{app}</b> completely (<kbd className="rounded bg-white/10 px-1 font-mono text-[11.5px]">⌘Q</kbd>), open it again and
-              start Cutroom again with <code className="rounded bg-white/10 px-1 font-mono text-[11.5px]">./cutroom</code>.
+              Quit <b>{app}</b> completely (<kbd className="rounded-md bg-surface-2 px-1.5 font-mono text-[11.5px]">⌘Q</kbd>), open it again and
+              start Cutroom again with <code className="rounded-md bg-surface-2 px-1.5 font-mono text-[11.5px]">./cutroom</code>.
             </>,
             <>
               If <b>{app}</b> is listed under <b>Privacy &amp; Security → Photos</b>, turn it on there too. Photos that are only in iCloud are
               downloaded through the Photos app: the first time, macOS asks to let {app} control Photos. Click <b>OK</b>.
             </>,
           ].map((step, i) => (
-            <li key={i} className="flex gap-3 rounded-xl border border-white/[0.06] bg-white/[0.015] px-4 py-3">
-              <span className="grid size-5 shrink-0 place-items-center rounded-full bg-primary/15 font-mono text-[11px] text-primary">{i + 1}</span>
-              <span className="text-zinc-300">{step}</span>
+            <li key={i} className="flex gap-3 rounded-2xl bg-surface-2/60 px-4 py-3">
+              <span className="grid size-5 shrink-0 place-items-center rounded-full bg-control font-mono text-[11px] text-control-ink">{i + 1}</span>
+              <span className="text-foreground">{step}</span>
             </li>
           ))}
         </ol>
@@ -131,22 +131,22 @@ function Tile({ item, selected, onClick }: { item: PhotoItem; selected: number; 
       data-photo={item.id}
       title={item.name}
       className={cn(
-        "group relative aspect-square overflow-hidden rounded-lg outline-none transition",
-        selected ? "ring-2 ring-primary ring-offset-2 ring-offset-[#0d0d10]" : "hover:brightness-110",
+        "group relative aspect-square overflow-hidden rounded-xl outline-none transition",
+        selected ? "ring-[2.5px] ring-ink ring-offset-2 ring-offset-surface" : "hover:brightness-105",
       )}
     >
-      <PhotoThumb id={item.id} className={cn("absolute inset-0 transition-transform", selected && "scale-[0.94] rounded-md")} />
-      <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-black/30 via-transparent to-black/45" />
+      <PhotoThumb id={item.id} className={cn("absolute inset-0 transition-transform", selected && "scale-[0.94] rounded-lg")} />
+      <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-ink/25 via-transparent to-ink/35" />
       {item.live && (
-        <span className="absolute top-1.5 left-1.5 rounded bg-black/55 px-1 text-[9.5px] font-semibold tracking-wider text-white/90 backdrop-blur">
+        <span className="absolute top-1.5 left-1.5 rounded-full bg-control/70 px-1.5 text-[9.5px] font-semibold tracking-wider text-control-ink backdrop-blur">
           LIVE
         </span>
       )}
       {!item.local && (
-        <Cloud className="absolute bottom-1.5 left-1.5 size-3.5 text-white/85" aria-label="in iCloud: downloaded when you import it" />
+        <Cloud className="absolute bottom-1.5 left-1.5 size-3.5 text-control-ink drop-shadow" aria-label="in iCloud: downloaded when you import it" />
       )}
       {item.kind === "video" && (
-        <span className="absolute right-1.5 bottom-1.5 inline-flex items-center gap-1 rounded bg-black/55 px-1 font-mono text-[10.5px] text-white/90 backdrop-blur">
+        <span className="absolute right-1.5 bottom-1.5 inline-flex items-center gap-1 rounded-full bg-control/70 px-1.5 font-mono text-[10.5px] text-control-ink backdrop-blur">
           <Film className="size-2.5" />
           {clock(item.duration)}
         </span>
@@ -154,7 +154,7 @@ function Tile({ item, selected, onClick }: { item: PhotoItem; selected: number; 
       <span
         className={cn(
           "absolute top-1.5 right-1.5 grid size-5 place-items-center rounded-full border text-[10.5px] font-semibold transition",
-          selected ? "border-primary bg-primary text-white" : "border-white/70 bg-black/20 opacity-0 group-hover:opacity-100",
+          selected ? "border-accent bg-accent text-accent-ink" : "border-control-ink/80 bg-control/20 opacity-0 group-hover:opacity-100",
         )}
       >
         {selected ? selected : ""}
@@ -219,25 +219,25 @@ function Browser({ onPicked, picked, toggle }: { picked: Map<string, PhotoItem>;
 
   return (
     <div className="grid min-h-0 flex-1 grid-cols-[230px_minmax(0,1fr)] max-md:grid-cols-1">
-      <aside className="min-h-0 overflow-y-auto border-r border-white/[0.06] p-3 max-md:hidden">
+      <aside className="min-h-0 overflow-y-auto border-r border-border p-3 max-md:hidden">
         <div className="eyebrow mb-1.5 px-2">Library</div>
         {sources.map((s) => (
           <button
             key={s.id}
             onClick={() => setSource(s)}
             className={cn(
-              "flex w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-left text-[13px] transition",
-              source.id === s.id ? "bg-white/[0.08] text-foreground" : "text-muted-foreground hover:text-foreground",
+              "flex w-full items-center gap-2.5 rounded-full px-3 py-1.5 text-left text-[13px] transition",
+              source.id === s.id ? "bg-accent text-accent-ink" : "text-ink-soft hover:bg-ink/[0.05] hover:text-foreground",
             )}
           >
-            <s.icon className="size-4 text-primary" />
+            <s.icon className="size-4" />
             <span className="flex-1">{s.title}</span>
-            <span className="font-mono text-[11px] text-subtle">{s.count ?? ""}</span>
+            <span className={cn("font-mono text-[11px]", source.id === s.id ? "text-accent-ink" : "text-subtle")}>{s.count ?? ""}</span>
           </button>
         ))}
         <div className="eyebrow mt-4 mb-1.5 px-2">Albums</div>
         {albums.isLoading &&
-          [0, 1, 2, 3].map((i) => <Skeleton key={i} className="mb-1.5 h-10 rounded-lg bg-white/[0.04]" />)}
+          [0, 1, 2, 3].map((i) => <Skeleton key={i} className="mb-1.5 h-10 rounded-lg" />)}
         {albums.data?.length === 0 && <div className="px-2 text-[12.5px] text-subtle">No albums</div>}
         {albums.data?.map((a) => (
           <button
@@ -245,14 +245,14 @@ function Browser({ onPicked, picked, toggle }: { picked: Map<string, PhotoItem>;
             onClick={() => setSource({ id: a.id, title: a.title, album: a.id })}
             data-album={a.title}
             className={cn(
-              "flex w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-left transition",
-              source.id === a.id ? "bg-white/[0.08]" : "hover:bg-white/[0.03]",
+              "flex w-full items-center gap-2.5 rounded-2xl px-2 py-1.5 text-left transition",
+              source.id === a.id ? "bg-accent text-accent-ink" : "hover:bg-ink/[0.05]",
             )}
           >
-            <PhotoThumb id={a.cover} w={96} className="size-9 shrink-0 rounded-md" />
+            <PhotoThumb id={a.cover} w={96} className="size-9 shrink-0 rounded-xl" />
             <span className="min-w-0 flex-1">
-              <span className={cn("block truncate text-[13px]", source.id === a.id ? "text-foreground" : "text-zinc-300")}>{a.title}</span>
-              <span className="block truncate text-[11px] text-subtle">
+              <span className={cn("block truncate text-[13px]", source.id === a.id ? "text-accent-ink" : "text-foreground")}>{a.title}</span>
+              <span className={cn("block truncate text-[11px]", source.id === a.id ? "text-accent-ink" : "text-subtle")}>
                 {a.folder ? `${a.folder} · ` : ""}
                 {a.count}
               </span>
@@ -262,20 +262,20 @@ function Browser({ onPicked, picked, toggle }: { picked: Map<string, PhotoItem>;
       </aside>
 
       <section className="flex min-h-0 flex-col">
-        <div className="flex flex-wrap items-center gap-3 border-b border-white/[0.06] px-5 py-3">
+        <div className="flex flex-wrap items-center gap-3 border-b border-border px-5 py-3">
           <div className="min-w-0 flex-1">
             <div className="truncate text-[15px] font-semibold">{source.title}</div>
             <div className="text-[12px] text-muted-foreground">{items.isLoading ? "…" : pluralize(total, "item")}</div>
           </div>
           {!source.videos && (
-            <div className="flex rounded-lg border border-white/[0.07] p-0.5">
+            <div className="flex rounded-full bg-surface-2 p-0.5">
               {KINDS.map((k) => (
                 <button
                   key={k.value}
                   onClick={() => setKind(k.value)}
                   className={cn(
-                    "h-7 rounded-md px-2.5 text-[12.5px] font-medium transition",
-                    kind === k.value ? "bg-white/[0.09] text-foreground" : "text-muted-foreground hover:text-foreground",
+                    "h-7 rounded-full px-3 text-[12.5px] font-medium transition",
+                    kind === k.value ? "bg-accent text-accent-ink" : "text-ink-soft hover:text-foreground",
                   )}
                 >
                   {k.label}
@@ -291,7 +291,7 @@ function Browser({ onPicked, picked, toggle }: { picked: Map<string, PhotoItem>;
               value={since}
               max={until || undefined}
               onChange={(e) => setSince(e.target.value)}
-              className="h-8 rounded-lg border border-white/[0.08] bg-white/[0.03] px-2 text-[12.5px] text-foreground [color-scheme:dark]"
+              className="h-8 rounded-full border border-input bg-surface px-3 text-[12.5px] text-foreground"
             />
             <label htmlFor="photos-until">to</label>
             <input
@@ -300,7 +300,7 @@ function Browser({ onPicked, picked, toggle }: { picked: Map<string, PhotoItem>;
               value={until}
               min={since || undefined}
               onChange={(e) => setUntil(e.target.value)}
-              className="h-8 rounded-lg border border-white/[0.08] bg-white/[0.03] px-2 text-[12.5px] text-foreground [color-scheme:dark]"
+              className="h-8 rounded-full border border-input bg-surface px-3 text-[12.5px] text-foreground"
             />
             {dated && (
               <button
@@ -321,7 +321,7 @@ function Browser({ onPicked, picked, toggle }: { picked: Map<string, PhotoItem>;
           {items.isLoading ? (
             <div className="grid grid-cols-[repeat(auto-fill,minmax(118px,1fr))] gap-2">
               {Array.from({ length: 24 }).map((_, i) => (
-                <Skeleton key={i} className="aspect-square rounded-lg bg-white/[0.04]" />
+                <Skeleton key={i} className="aspect-square rounded-lg" />
               ))}
             </div>
           ) : items.error ? (
@@ -405,11 +405,11 @@ export function PhotosPicker({ pid, open, onOpenChange }: { pid: string; open: b
   return (
     <Dialog open={open} onOpenChange={(o) => !running && onOpenChange(o)}>
       <DialogContent
-        className="flex h-[min(780px,90vh)] max-w-[min(1180px,94vw)] flex-col gap-0 overflow-hidden border-white/10 bg-[#0d0d10] p-0 sm:max-w-[min(1180px,94vw)]"
+        className="flex h-[min(780px,90vh)] max-w-[min(1180px,94vw)] flex-col gap-0 overflow-hidden p-0 sm:max-w-[min(1180px,94vw)]"
         showCloseButton={!running}
       >
-        <div className="flex items-center gap-3 border-b border-white/[0.06] px-5 py-3.5">
-          <Images className="size-4 text-primary" />
+        <div className="flex items-center gap-3 border-b border-border px-5 py-3.5">
+          <Images className="size-4" />
           <DialogTitle className="text-[15px]">Import from Photos</DialogTitle>
           <DialogDescription className="sr-only">Pick photos and videos from your Mac's Photos library</DialogDescription>
         </div>
@@ -417,7 +417,7 @@ export function PhotosPicker({ pid, open, onOpenChange }: { pid: string; open: b
         {!st || st.state === "loading" || st.state === "idle" ? (
           <div className="grid flex-1 place-items-center text-center" data-testid="photos-loading">
             <div>
-              <Loader2 className="mx-auto mb-3 size-5 animate-spin text-primary" />
+              <Loader2 className="mx-auto mb-3 size-5 animate-spin" />
               <div className="text-[14px] font-medium">Reading your Photos library…</div>
               <div className="mt-1 text-[12.5px] text-muted-foreground">The first time takes a little while on a big library.</div>
             </div>
@@ -431,7 +431,7 @@ export function PhotosPicker({ pid, open, onOpenChange }: { pid: string; open: b
         )}
 
         {ready && (
-          <div className="flex flex-wrap items-center gap-3 border-t border-white/[0.06] px-5 py-3">
+          <div className="flex flex-wrap items-center gap-3 border-t border-border px-5 py-3">
             <div className="text-[13px]" data-testid="photos-selected">
               <span className="font-semibold">{picked.size}</span> <span className="text-muted-foreground">selected</span>
             </div>
@@ -443,7 +443,7 @@ export function PhotosPicker({ pid, open, onOpenChange }: { pid: string; open: b
             {live > 0 && !running && (
               <div className="flex items-center gap-2 text-[12.5px] text-muted-foreground">
                 <span>{pluralize(live, "Live Photo")}:</span>
-                <div className="flex rounded-lg border border-white/[0.07] p-0.5">
+                <div className="flex rounded-full bg-surface-2 p-0.5">
                   {[
                     [false, "Still"],
                     [true, "Video"],
@@ -452,8 +452,8 @@ export function PhotosPicker({ pid, open, onOpenChange }: { pid: string; open: b
                       key={String(label)}
                       onClick={() => setLiveVideo(v as boolean)}
                       className={cn(
-                        "h-6 rounded-md px-2 text-[12px] font-medium transition",
-                        liveVideo === v ? "bg-white/[0.09] text-foreground" : "text-muted-foreground hover:text-foreground",
+                        "h-6 rounded-full px-2.5 text-[12px] font-medium transition",
+                        liveVideo === v ? "bg-accent text-accent-ink" : "text-ink-soft hover:text-foreground",
                       )}
                     >
                       {label as string}
@@ -464,8 +464,8 @@ export function PhotosPicker({ pid, open, onOpenChange }: { pid: string; open: b
             )}
             {running && job && (
               <div className="flex min-w-[240px] flex-1 items-center gap-3" data-testid="photos-progress">
-                <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-white/[0.06]">
-                  <div className="h-full rounded-full bg-primary transition-all" style={{ width: `${Math.max(4, job.progress)}%` }} />
+                <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-ink/10">
+                  <div className="h-full rounded-full bg-ink transition-all" style={{ width: `${Math.max(4, job.progress)}%` }} />
                 </div>
                 <span className="max-w-[260px] truncate text-[12px] text-muted-foreground">{job.step ?? "Starting…"}</span>
               </div>
@@ -482,7 +482,7 @@ export function PhotosPicker({ pid, open, onOpenChange }: { pid: string; open: b
           </div>
         )}
         {!ready && st && st.state !== "loading" && (
-          <div className="flex items-center gap-2 border-t border-white/[0.06] px-5 py-3 text-[12px] text-subtle">
+          <div className="flex items-center gap-2 border-t border-border px-5 py-3 text-[12px] text-subtle">
             <Settings2 className="size-3.5" /> Nothing in your Photos library is ever changed: Cutroom copies the originals into this project.
           </div>
         )}

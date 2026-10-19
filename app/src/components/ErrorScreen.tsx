@@ -1,6 +1,7 @@
 import { AlertTriangle, ArrowLeft, Check, ChevronDown, Copy, RotateCw } from "lucide-react"
 import { Component, type ErrorInfo, type ReactNode, useState } from "react"
 import { isRouteErrorResponse, useRouteError } from "react-router"
+import { buttonVariants } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 
 function describe(error: unknown): { message: string; details: string } {
@@ -50,20 +51,20 @@ export function ErrorScreen({ error, componentStack, fullPage }: { error: unknow
           <div className="relative mt-6 flex justify-center gap-2">
             <button
               onClick={goBack}
-              className="inline-flex h-9 items-center gap-2 rounded-md border border-border bg-white/[0.02] px-4 text-[13.5px] font-medium transition hover:bg-white/[0.06]"
+              className={buttonVariants({ variant: "outline" })}
             >
               <ArrowLeft className="size-4" /> Go back
             </button>
             <button
               onClick={() => window.location.reload()}
-              className="inline-flex h-9 items-center gap-2 rounded-md bg-primary px-4 text-[13.5px] font-medium text-white shadow-[inset_0_1px_0_rgb(255_255_255/0.2)] transition hover:bg-[#8a6dff]"
+              className={buttonVariants()}
             >
               <RotateCw className="size-4" /> Reload
             </button>
           </div>
         </div>
 
-        <div className="mt-3 overflow-hidden rounded-xl border border-white/[0.06] bg-[#0b0b0e]">
+        <div className="mt-3 overflow-hidden rounded-card bg-surface shadow-soft">
           <button
             onClick={() => setOpen((o) => !o)}
             aria-expanded={open}
@@ -73,21 +74,21 @@ export function ErrorScreen({ error, componentStack, fullPage }: { error: unknow
             <ChevronDown className={cn("size-4 transition-transform", open && "rotate-180")} />
           </button>
           {open && (
-            <div className="border-t border-white/[0.05] px-4 py-3">
+            <div className="border-t border-border px-4 py-3">
               <div className="mb-2 flex items-start justify-between gap-3">
-                <code className="text-[12.5px] [overflow-wrap:anywhere] text-red-200">{message}</code>
+                <code className="text-[12.5px] [overflow-wrap:anywhere] text-destructive">{message}</code>
                 <button
                   onClick={() => {
                     navigator.clipboard?.writeText(report)
                     setCopied(true)
                     setTimeout(() => setCopied(false), 1500)
                   }}
-                  className="inline-flex shrink-0 items-center gap-1.5 rounded-md border border-white/10 px-2 py-1 text-[11.5px] text-muted-foreground transition hover:text-foreground"
+                  className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-border px-2.5 py-1 text-[11.5px] text-muted-foreground transition hover:text-foreground"
                 >
-                  {copied ? <Check className="size-3.5 text-ok" /> : <Copy className="size-3.5" />} {copied ? "Copied" : "Copy"}
+                  {copied ? <Check className="size-3.5 text-success-ink" /> : <Copy className="size-3.5" />} {copied ? "Copied" : "Copy"}
                 </button>
               </div>
-              <pre className="max-h-72 overflow-auto font-mono text-[11px] leading-[1.6] break-all whitespace-pre-wrap text-zinc-500">
+              <pre className="max-h-72 overflow-auto font-mono text-[11px] leading-[1.6] break-all whitespace-pre-wrap text-ink-soft">
                 {report.slice(message.length + 1).trim()}
               </pre>
             </div>

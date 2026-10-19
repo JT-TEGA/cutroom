@@ -13,13 +13,14 @@ import { arrayMove, rectSortingStrategy, SortableContext, sortableKeyboardCoordi
 import { CSS } from "@dnd-kit/utilities"
 import { useQueryClient } from "@tanstack/react-query"
 import { AnimatePresence, motion } from "framer-motion"
-import { Clapperboard, GripVertical, ImageIcon, Images, Mic, Music2, Pause, Play, Upload, X } from "lucide-react"
+import { CircleAlert, Clapperboard, GripVertical, ImageIcon, Images, Mic, Music2, Pause, Play, Upload, X } from "lucide-react"
 import { type ReactNode, useRef, useState } from "react"
 import { toast } from "sonner"
 import { fileContentUrl } from "@/api/client"
 import { keys, useDeleteFile, usePatchFile, useReorderFiles, useUpload } from "@/api/queries"
 import type { Project, ProjectFile } from "@/api/types"
 import { Thumb } from "@/components/Thumb"
+import { Button } from "@/components/ui/button"
 import { clock, pluralize } from "@/lib/format"
 import { cn } from "@/lib/utils"
 import { MusicPanel } from "./MusicPanel"
@@ -75,18 +76,20 @@ const ZONES: Record<Kind, { title: string; sub: string; accept: string; icon: ty
   music: { title: "Music", sub: "The track to cut to", accept: "audio/*,.m4a,.wav,.mp3,.aac,.flac", icon: Music2 },
 }
 
+/** A card to drop files on. The required one (clips) is bigger, has the stronger border and the filled Browse pill;
+ * the optional ones (voiceover, music) get an outline Browse, so each card has one main action. */
 function DropZone({
   kind,
   onFiles,
   progress,
-  big,
+  required,
   action,
   children,
 }: {
   kind: Kind
   onFiles: (files: File[]) => void
   progress: number | null
-  big?: boolean
+  required?: boolean
   action?: ReactNode
   children?: ReactNode
 }) {
@@ -122,33 +125,42 @@ function DropZone({
           })
       }}
       className={cn(
-        "relative flex flex-col overflow-hidden rounded-2xl border border-dashed transition-all",
-        over ? "border-primary bg-primary/[0.08] shadow-[0_0_0_4px_rgb(124_92_255/0.12)]" : "border-white/[0.1] bg-white/[0.015]",
+        "relative flex flex-col overflow-hidden rounded-card transition-all",
+        required ? "border-[1.5px] border-ink bg-card shadow-soft" : "border border-dashed border-ink/20 bg-card/70",
+        over && "border-ink bg-accent-soft shadow-[0_0_0_4px_var(--accent)]",
       )}
     >
-      <div className="flex items-center">
-      <button
-        type="button"
-        onClick={() => input.current?.click()}
-        className={cn("group flex min-w-0 flex-1 items-center gap-4 text-left", big ? "px-6 py-6" : "px-5 py-5")}
-      >
-        <span
-          className={cn(
-            "grid shrink-0 place-items-center rounded-xl border border-white/[0.08] bg-white/[0.04] text-primary transition group-hover:scale-105 group-hover:border-primary/40",
-            big ? "size-12" : "size-10",
-          )}
-        >
-          <z.icon className={big ? "size-5" : "size-[18px]"} />
-        </span>
-        <span className="min-w-0 flex-1">
-          <span className="block text-[14px] font-semibold">{z.title}</span>
-          <span className="block text-[12.5px] text-muted-foreground">{over ? "Drop to add" : z.sub}</span>
-        </span>
-        <span className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg border border-white/[0.08] bg-white/[0.03] px-3 text-[12.5px] font-medium text-zinc-300 transition group-hover:bg-white/[0.07]">
-          <Upload className="size-3.5" /> Browse
-        </span>
-      </button>
-      {action && <div className={cn("shrink-0", big ? "pr-6" : "pr-5")}>{action}</div>}
+      <div className={cn("flex flex-wrap items-center gap-x-4 gap-y-3", required ? "px-6 py-7" : "px-5 py-5")}>
+        <button type="button" onClick={() => input.current?.click()} className="group flex min-w-0 flex-1 items-center gap-4 text-left">
+          <span
+            className={cn(
+              "grid shrink-0 place-items-center rounded-2xl transition group-hover:scale-105",
+              required ? "size-13 bg-accent text-accent-ink" : "size-10 bg-surface-2 text-foreground",
+            )}
+          >
+            <z.icon className={required ? "size-[22px]" : "size-[18px]"} />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="flex items-center gap-2">
+              <span className={cn("font-semibold", required ? "text-[16px]" : "text-[14px]")}>{z.title}</span>
+              <span
+                className={cn(
+                  "rounded-full px-2 py-px text-[10.5px] font-semibold tracking-[0.04em] uppercase",
+                  required ? "bg-control text-control-ink" : "bg-surface-2 text-ink-soft",
+                )}
+              >
+                {required ? "Required" : "Optional"}
+              </span>
+            </span>
+            <span className="mt-0.5 block text-[12.5px] text-muted-foreground">{over ? "Drop to add" : z.sub}</span>
+          </span>
+        </button>
+        <div className="flex shrink-0 items-center gap-2">
+          <Button type="button" size="sm" variant={required ? "default" : "outline"} onClick={() => input.current?.click()}>
+            <Upload /> Browse
+          </Button>
+          {action}
+        </div>
       </div>
       <input
         ref={input}
@@ -170,9 +182,9 @@ function DropZone({
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="absolute inset-x-0 bottom-0 h-1 bg-white/5"
+            className="absolute inset-x-0 bottom-0 h-1 bg-ink/10"
           >
-            <motion.div className="h-full bg-primary" animate={{ width: `${Math.max(3, progress * 100)}%` }} />
+            <motion.div className="h-full bg-ink" animate={{ width: `${Math.max(3, progress * 100)}%` }} />
           </motion.div>
         )}
       </AnimatePresence>
@@ -209,7 +221,7 @@ function NameEditor({ file, pid }: { file: ProjectFile; pid: string }) {
             setEditing(false)
           }
         }}
-        className="h-6 w-full rounded border border-primary/60 bg-black/40 px-1.5 text-[12px] outline-none"
+        className="h-6 w-full rounded-full border border-ink/50 bg-surface px-2 text-[12px] outline-none"
       />
     )
   return (
@@ -220,7 +232,7 @@ function NameEditor({ file, pid }: { file: ProjectFile; pid: string }) {
         setEditing(true)
       }}
       title="Rename: a descriptive name helps Claude match the clip to what you say"
-      className="block h-6 w-full truncate rounded px-1.5 text-left text-[12px] text-zinc-300 transition hover:bg-white/[0.06]"
+      className="block h-6 w-full truncate rounded-full px-2 text-left text-[12px] text-foreground transition hover:bg-ink/[0.06]"
     >
       {stem}
       <span className="text-subtle">{ext}</span>
@@ -242,37 +254,39 @@ function Tile({ file, index, pid, onDelete, overlay }: { file: ProjectFile; inde
         {...(overlay ? {} : s.attributes)}
         {...(overlay ? {} : s.listeners)}
         className={cn(
-          "relative aspect-[9/16] cursor-grab overflow-hidden rounded-xl border border-white/[0.08] bg-card shadow-[0_8px_24px_-12px_rgb(0_0_0/0.8)] transition group-hover:border-white/20 active:cursor-grabbing",
-          overlay && "border-primary/60 shadow-[0_20px_40px_-12px_rgb(0_0_0/0.9)]",
+          "relative aspect-[9/16] cursor-grab overflow-hidden rounded-2xl bg-card shadow-soft transition group-hover:shadow-lift active:cursor-grabbing",
+          overlay && "shadow-lift ring-2 ring-ink",
         )}
       >
         {voice ? (
-          <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-gradient-to-b from-[#2a1f5c] via-[#1a1538] to-[#121018]">
-            <Mic className="size-5 text-violet-200" />
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-gradient-to-b from-accent to-accent-soft text-accent-ink">
+            <Mic className="size-5" />
             <div className="flex h-8 items-center gap-[3px]">
               {Array.from({ length: 13 }).map((_, i) => (
-                <span key={i} className="w-[3px] rounded-full bg-violet-300/70" style={{ height: `${20 + 70 * Math.abs(Math.sin(i * 1.7 + file.size))}%` }} />
+                <span key={i} className="w-[3px] rounded-full bg-ink/70" style={{ height: `${20 + 70 * Math.abs(Math.sin(i * 1.7 + file.size))}%` }} />
               ))}
             </div>
-            <span className="text-[11px] font-medium text-violet-100/80">Voiceover</span>
+            <span className="text-[11px] font-medium">Voiceover</span>
           </div>
         ) : (
-          <Thumb path={`${pid}/${file.path}`} w={240} className="absolute inset-0" />
+          <>
+            <Thumb path={`${pid}/${file.path}`} w={240} className="absolute inset-0" />
+            <div className="absolute inset-0 bg-gradient-to-b from-ink/25 via-transparent to-ink/30" />
+          </>
         )}
-        <div className="absolute inset-0 bg-gradient-to-b from-black/40 via-transparent to-black/50" />
-        <span className="absolute top-1.5 left-1.5 grid h-5 min-w-5 place-items-center rounded-md bg-black/60 px-1 font-mono text-[10.5px] text-zinc-200 backdrop-blur">
+        <span className="absolute top-1.5 left-1.5 grid h-5 min-w-5 place-items-center rounded-full bg-control/75 px-1.5 font-mono text-[10.5px] text-control-ink backdrop-blur">
           {index + 1}
         </span>
-        <span className="absolute right-1.5 bottom-1.5 inline-flex items-center gap-1 rounded-md bg-black/60 px-1.5 py-0.5 font-mono text-[10.5px] text-zinc-200 backdrop-blur">
+        <span className="absolute right-1.5 bottom-1.5 inline-flex items-center gap-1 rounded-full bg-control/75 px-1.5 py-0.5 font-mono text-[10.5px] text-control-ink backdrop-blur">
           {file.kind === "photo" ? <ImageIcon className="size-3" /> : clock(file.duration)}
         </span>
-        <GripVertical className="absolute top-1.5 right-1 size-4 text-white/0 transition group-hover:text-white/60" />
+        <GripVertical className={cn("absolute top-1.5 right-1 size-4 opacity-0 transition group-hover:opacity-70", voice ? "text-accent-ink" : "text-control-ink")} />
         {onDelete && (
           <button
             aria-label={`Remove ${file.name}`}
             onPointerDown={(e) => e.stopPropagation()}
             onClick={onDelete}
-            className="absolute right-1.5 bottom-7 grid size-6 place-items-center rounded-md bg-black/70 text-zinc-300 opacity-0 backdrop-blur transition group-hover:opacity-100 hover:bg-destructive hover:text-white"
+            className="absolute right-1.5 bottom-7 grid size-6 place-items-center rounded-full bg-control/80 text-control-ink opacity-0 backdrop-blur transition group-hover:opacity-100 hover:bg-destructive"
           >
             <X className="size-3.5" />
           </button>
@@ -287,7 +301,7 @@ function MusicRow({ file, pid, onDelete }: { file: ProjectFile; pid: string; onD
   const audio = useRef<HTMLAudioElement>(null)
   const [playing, setPlaying] = useState(false)
   return (
-    <div className="flex items-center gap-3 border-t border-white/[0.05] px-5 py-3 first:border-t-0">
+    <div className="flex items-center gap-3 border-t border-border px-5 py-3 first:border-t-0">
       <button
         onClick={() => {
           const a = audio.current
@@ -295,7 +309,7 @@ function MusicRow({ file, pid, onDelete }: { file: ProjectFile; pid: string; onD
           if (a.paused) a.play()
           else a.pause()
         }}
-        className="grid size-8 place-items-center rounded-full bg-primary/15 text-primary transition hover:bg-primary/25"
+        className="grid size-8 place-items-center rounded-full bg-ink/[0.07] text-foreground transition hover:bg-ink/[0.12]"
         aria-label={playing ? "Pause" : "Play"}
       >
         {playing ? <Pause className="size-3.5" /> : <Play className="size-3.5 translate-x-px" />}
@@ -305,7 +319,7 @@ function MusicRow({ file, pid, onDelete }: { file: ProjectFile; pid: string; onD
         <div className="truncate text-[13px] font-medium">{file.name}</div>
         <div className="text-[11.5px] text-muted-foreground">{clock(file.duration)}</div>
       </div>
-      <button onClick={onDelete} className="rounded p-1.5 text-muted-foreground transition hover:bg-white/5 hover:text-foreground" aria-label="Remove">
+      <button onClick={onDelete} className="rounded-full p-1.5 text-muted-foreground transition hover:bg-ink/[0.06] hover:text-foreground" aria-label="Remove">
         <X className="size-3.5" />
       </button>
     </div>
@@ -372,42 +386,56 @@ export function StepMedia({ project }: { project: Project }) {
       <div className="flex min-w-0 flex-col gap-5">
         <DropZone
           kind="clip"
-          big
+          required
           onFiles={(l) => send("clip", l)}
           progress={progress.clip}
           action={
-            <button
-              type="button"
-              onClick={() => setPhotos(true)}
-              className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-primary/30 bg-primary/10 px-3 text-[12.5px] font-medium text-violet-100 transition hover:bg-primary/20"
-            >
-              <Images className="size-3.5" /> Import from Photos
-            </button>
+            <Button type="button" size="sm" variant="outline" onClick={() => setPhotos(true)}>
+              <Images /> Import from Photos
+            </Button>
           }
-        />
+        >
+          {visual.length === 0 && (
+            <div data-testid="clips-required" className="flex items-center gap-2 border-t border-ink/10 bg-accent-soft/70 px-6 py-3 text-[12.5px] font-medium text-foreground">
+              <CircleAlert className="size-4 shrink-0 text-warn-ink" /> Add at least one clip or photo to continue
+            </div>
+          )}
+        </DropZone>
         <PhotosPicker pid={pid} open={photos} onOpenChange={setPhotos} />
 
-        <div className="panel min-h-[300px] p-5">
-          <div className="mb-4 flex items-center justify-between gap-4">
-            <div>
-              <div className="text-[14px] font-semibold">Edit order</div>
-              <div className="text-[12.5px] text-muted-foreground">
-                Drag to reorder. Click a name to rename it: “incline-bench” beats “IMG_4821”.
-              </div>
-            </div>
-            <div className="shrink-0 text-[12.5px] text-muted-foreground">
-              {pluralize(visual.length, "shot")}
-              {ordered.length > visual.length && ` · ${pluralize(ordered.length - visual.length, "voiceover")}`}
-            </div>
+        {visual.length === 0 ? (
+          // nothing to order yet: a slim bar, not a big empty box; it opens up with the first clip
+          <div data-testid="edit-order" data-state="collapsed" className="flex items-center gap-3 rounded-full bg-surface-2/70 py-2.5 pr-5 pl-2.5">
+            <span className="grid size-8 shrink-0 place-items-center rounded-full bg-surface text-ink-soft shadow-soft">
+              <Clapperboard className="size-4" />
+            </span>
+            <span className="text-[13px] font-semibold">Edit order</span>
+            <span className="min-w-0 flex-1 truncate text-[12.5px] text-muted-foreground">
+              {ordered.length ? "Your voiceover is in: clips you add line up after it." : "Your clips line up here, in the order they'll be used."}
+            </span>
+            <span className="shrink-0 text-[12.5px] text-muted-foreground">0 shots</span>
           </div>
-          {ordered.length === 0 ? (
-            <div className="grid h-[220px] place-items-center rounded-xl border border-dashed border-white/[0.07] text-center text-[13px] text-muted-foreground">
+        ) : (
+          <motion.div
+            data-testid="edit-order"
+            data-state="expanded"
+            initial={{ opacity: 0, y: -4 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
+            className="panel p-5"
+          >
+            <div className="mb-4 flex items-center justify-between gap-4">
               <div>
-                <Clapperboard className="mx-auto mb-2 size-5 text-subtle" />
-                Your clips appear here, in the order they'll be used.
+                <div className="text-[14px] font-semibold">Edit order</div>
+                <div className="text-[12.5px] text-muted-foreground">
+                  Drag to reorder. Click a name to rename it: “incline-bench” beats “IMG_4821”.
+                </div>
+              </div>
+              <div className="shrink-0 text-[12.5px] text-muted-foreground">
+                {pluralize(visual.length, "shot")}
+                {ordered.length > visual.length && ` · ${pluralize(ordered.length - visual.length, "voiceover")}`}
               </div>
             </div>
-          ) : (
             <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={onDragStart} onDragEnd={onDragEnd} onDragCancel={() => setDragging(null)}>
               <SortableContext items={ordered.map((f) => f.id)} strategy={rectSortingStrategy}>
                 <div className="flex flex-wrap gap-4">
@@ -418,16 +446,26 @@ export function StepMedia({ project }: { project: Project }) {
               </SortableContext>
               <DragOverlay>{active ? <Tile file={active} index={ordered.indexOf(active)} pid={pid} overlay /> : null}</DragOverlay>
             </DndContext>
-          )}
-        </div>
+          </motion.div>
+        )}
         {song && <MusicPanel key={song.id} project={project} file={song} />}
       </div>
 
       <div className="flex flex-col gap-5">
         <DropZone kind="voiceover" onFiles={(l) => send("voiceover", l)} progress={progress.voiceover}>
           {ordered.some((f) => f.kind === "voiceover") && (
-            <div className="border-t border-white/[0.05] px-5 py-3 text-[12.5px] text-muted-foreground">
-              <span className="text-foreground">{ordered.filter((f) => f.kind === "voiceover").map((f) => f.name).join(", ")}</span>
+            <div className="border-t border-border px-5 py-3 text-[12.5px] text-muted-foreground">
+              {ordered
+                .filter((f) => f.kind === "voiceover")
+                .map((f) => (
+                  // removable here too: with no clips yet the edit order is folded away
+                  <div key={f.id} className="flex items-center justify-between gap-2">
+                    <span className="truncate text-foreground">{f.name}</span>
+                    <button onClick={() => del.mutate(f.id)} className="rounded-full p-1 transition hover:bg-ink/[0.06] hover:text-foreground" aria-label={`Remove ${f.name}`}>
+                      <X className="size-3.5" />
+                    </button>
+                  </div>
+                ))}
               <div className="mt-0.5">
                 {mixed ? "Mixed edit: it takes the clips after it in the order." : "It plays over the clips; B-roll follows what you say."}
               </div>
@@ -439,14 +477,14 @@ export function StepMedia({ project }: { project: Project }) {
             <MusicRow key={f.id} file={f} pid={pid} onDelete={() => del.mutate(f.id)} />
           ))}
           {!music.length && (
-            <div className="border-t border-white/[0.05] px-5 py-3 text-[12.5px] leading-relaxed text-muted-foreground">
+            <div className="border-t border-border px-5 py-3 text-[12.5px] leading-relaxed text-muted-foreground">
               Adding the song in Instagram or TikTok when you post? Upload the same song here anyway: it sets the beat and
               the preview, and you'll get a copy without it.
             </div>
           )}
         </DropZone>
-        <div className="rounded-2xl border border-white/[0.05] bg-white/[0.015] p-5 text-[12.5px] leading-relaxed text-muted-foreground">
-          <div className="mb-1.5 font-medium text-zinc-300">Good to know</div>
+        <div className="rounded-card bg-surface-2/60 p-5 text-[12.5px] leading-relaxed text-muted-foreground">
+          <div className="mb-1.5 font-medium text-foreground">Good to know</div>
           <ul className="list-disc space-y-1 pl-4">
             <li>Phone footage is fine: it's framed to 9:16 around faces automatically.</li>
             <li>Slow-mo and speed ramps look smooth only on 60 fps clips.</li>

@@ -42,7 +42,7 @@ export function VideoPlayer({ src, poster, className }: { src: string; poster?: 
       ref={wrap}
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
-      className={cn("group relative overflow-hidden rounded-[22px] border border-white/[0.09] bg-black shadow-[0_40px_80px_-30px_rgb(0_0_0/0.95),0_0_0_6px_rgb(255_255_255/0.02)]", className)}
+      className={cn("group relative overflow-hidden rounded-card bg-control shadow-lift ring-[6px] ring-surface", className)}
       style={{ aspectRatio: "9 / 16" }}
     >
       <video
@@ -67,7 +67,7 @@ export function VideoPlayer({ src, poster, className }: { src: string; poster?: 
             exit={{ opacity: 0, scale: 1.1 }}
             onClick={toggle}
             aria-label="Play"
-            className="absolute top-1/2 left-1/2 grid size-16 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full border border-white/25 bg-black/45 text-white shadow-2xl backdrop-blur-xl transition hover:bg-black/60"
+            className="absolute top-1/2 left-1/2 grid size-16 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full bg-accent text-accent-ink shadow-lift transition hover:scale-105"
           >
             <Play className="size-6 translate-x-0.5 fill-current" />
           </motion.button>
@@ -75,7 +75,7 @@ export function VideoPlayer({ src, poster, className }: { src: string; poster?: 
       </AnimatePresence>
       <div
         className={cn(
-          "absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent px-4 pt-10 pb-3.5 transition-opacity duration-300",
+          "absolute inset-x-0 bottom-0 bg-gradient-to-t from-control/80 via-control/30 to-transparent px-4 pt-10 pb-3.5 transition-opacity duration-300",
           playing && !hover ? "opacity-0" : "opacity-100",
         )}
       >
@@ -86,14 +86,14 @@ export function VideoPlayer({ src, poster, className }: { src: string; poster?: 
             if (v.current && dur) v.current.currentTime = ((e.clientX - r.left) / r.width) * dur
           }}
         >
-          <div className="absolute inset-x-0 top-1/2 h-1 -translate-y-1/2 rounded-full bg-white/20 transition-all group-hover/bar:h-1.5" />
-          <div className="absolute top-1/2 left-0 h-1 -translate-y-1/2 rounded-full bg-white transition-all group-hover/bar:h-1.5" style={{ width: dur ? `${(t / dur) * 100}%` : 0 }} />
+          <div className="absolute inset-x-0 top-1/2 h-1 -translate-y-1/2 rounded-full bg-control-ink/25 transition-all group-hover/bar:h-1.5" />
+          <div className="absolute top-1/2 left-0 h-1 -translate-y-1/2 rounded-full bg-accent transition-all group-hover/bar:h-1.5" style={{ width: dur ? `${(t / dur) * 100}%` : 0 }} />
         </div>
-        <div className="flex items-center gap-3 text-white">
+        <div className="flex items-center gap-3 text-control-ink">
           <button onClick={toggle} aria-label={playing ? "Pause" : "Play"} className="opacity-90 hover:opacity-100">
             {playing ? <Pause className="size-4 fill-current" /> : <Play className="size-4 fill-current" />}
           </button>
-          <span className="font-mono text-[11.5px] text-white/80 tabular-nums">
+          <span className="font-mono text-[11.5px] text-control-ink/85 tabular-nums">
             {clock(t)} / {clock(dur)}
           </span>
           <span className="flex-1" />

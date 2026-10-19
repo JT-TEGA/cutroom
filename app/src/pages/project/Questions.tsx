@@ -43,7 +43,7 @@ export function Questions() {
   return (
     <Page className="max-w-[860px] pt-10">
       <div className="mb-8 flex items-start gap-4">
-        <div className="grid size-11 shrink-0 place-items-center rounded-xl bg-primary/15 text-primary shadow-[0_0_30px_-6px_rgb(124_92_255/0.7)]">
+        <div className="grid size-11 shrink-0 place-items-center rounded-full bg-accent text-accent-ink">
           <MessageCircleQuestion className="size-5" />
         </div>
         <div>
@@ -78,7 +78,7 @@ export function Questions() {
                 <span
                   className={cn(
                     "shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium",
-                    q.blocking ? "bg-primary/15 text-violet-200" : "bg-white/[0.05] text-muted-foreground",
+                    q.blocking ? "bg-control text-control-ink" : "bg-surface-2 text-ink-soft",
                   )}
                 >
                   {q.blocking ? "Needed" : "Optional"}
@@ -90,10 +90,10 @@ export function Questions() {
                     key={o}
                     onClick={() => setAnswers((a) => ({ ...a, [q.id]: a[q.id] === o ? "" : o }))}
                     className={cn(
-                      "h-9 rounded-lg border px-3.5 text-[13px] font-medium transition",
+                      "h-9 rounded-full border px-4 text-[13px] font-medium transition",
                       v === o
-                        ? "border-primary/70 bg-primary/15 text-white shadow-[0_0_0_1px_rgb(124_92_255/0.3)]"
-                        : "border-white/[0.08] bg-white/[0.02] text-zinc-300 hover:border-white/20",
+                        ? "border-transparent bg-accent text-accent-ink"
+                        : "border-ink/15 bg-surface text-foreground hover:border-ink/35",
                     )}
                   >
                     {o}
@@ -103,7 +103,7 @@ export function Questions() {
                   value={custom ? v : ""}
                   onChange={(e) => setAnswers((a) => ({ ...a, [q.id]: e.target.value }))}
                   placeholder={q.options?.length ? "Or type your own answer" : "Your answer"}
-                  className={cn("h-9 bg-white/[0.025]", q.options?.length ? "w-64" : "w-full", custom && "border-primary/60")}
+                  className={cn("h-9", q.options?.length ? "w-64" : "w-full", custom && "border-ink/60")}
                 />
               </div>
             </motion.div>
@@ -112,9 +112,9 @@ export function Questions() {
       </div>
 
       {(project.assumptions ?? []).length > 0 && (
-        <div className="mt-6 rounded-2xl border border-white/[0.05] bg-white/[0.015] p-5">
-          <div className="mb-2.5 flex items-center gap-2 text-[13px] font-medium text-zinc-300">
-            <Info className="size-4 text-primary" /> Unless you say otherwise, Claude will assume:
+        <div className="mt-6 rounded-card bg-surface-2/60 p-5">
+          <div className="mb-2.5 flex items-center gap-2 text-[13px] font-medium text-foreground">
+            <Info className="size-4" /> Unless you say otherwise, Claude will assume:
           </div>
           <ul className="grid gap-1.5 pl-6 text-[13px] text-muted-foreground">
             {project.assumptions!.map((a) => (

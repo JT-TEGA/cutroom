@@ -17,7 +17,7 @@ function Section({ icon: Icon, title, sub, children, id }: { icon: typeof Palett
   return (
     <section id={id} className="panel min-w-0 p-6">
       <div className="mb-5 flex items-start gap-3">
-        <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-primary/12 text-primary">
+        <span className="grid size-8 shrink-0 place-items-center rounded-full bg-surface-2 text-foreground">
           <Icon className="size-4" />
         </span>
         <div>
@@ -34,7 +34,7 @@ function Line({ label, value, children }: { label: string; value?: ReactNode; ch
   return (
     <div>
       <div className="mb-2 flex items-baseline justify-between">
-        <span className="text-[12.5px] font-medium text-zinc-300">{label}</span>
+        <span className="text-[12.5px] font-medium text-foreground">{label}</span>
         {value != null && <span className="font-mono text-[12px] text-muted-foreground">{value}</span>}
       </div>
       {children}
@@ -48,8 +48,8 @@ function ColorField({ label, value, onChange }: { label: string; value: string |
     setText(value ?? "")
   }, [value])
   return (
-    <div className="flex items-center gap-3 rounded-xl border border-white/[0.06] bg-white/[0.02] p-2.5">
-      <label className="relative size-9 shrink-0 cursor-pointer overflow-hidden rounded-lg border border-white/15 shadow-inner" style={{ background: value ?? "#000" }}>
+    <div className="flex items-center gap-3 rounded-2xl bg-surface-2/60 p-2.5">
+      <label className="relative size-9 shrink-0 cursor-pointer overflow-hidden rounded-full shadow-inner ring-1 ring-ink/15" style={{ background: value ?? "#000" }}>
         <input type="color" value={value ?? "#000000"} onChange={(e) => onChange(e.target.value.toUpperCase())} className="absolute inset-0 cursor-pointer opacity-0" aria-label={label} />
       </label>
       <div className="min-w-0 flex-1">
@@ -75,8 +75,8 @@ function Chips<T extends string>({ value, options, onChange }: { value: T | null
           key={o.v}
           onClick={() => onChange(o.v)}
           className={cn(
-            "h-8 rounded-lg border px-3 text-[12.5px] font-medium transition",
-            value === o.v ? "border-primary/60 bg-primary/12 text-white" : "border-white/[0.07] text-muted-foreground hover:border-white/15 hover:text-foreground",
+            "h-8 rounded-full border px-3.5 text-[12.5px] font-medium transition",
+            value === o.v ? "border-transparent bg-accent text-accent-ink" : "border-ink/15 text-ink-soft hover:border-ink/35 hover:text-foreground",
           )}
         >
           {o.label}
@@ -107,15 +107,15 @@ function BackendCard({
     <button
       onClick={onPick}
       className={cn(
-        "relative flex flex-col items-start gap-3 rounded-xl border p-4 text-left transition",
-        active ? "border-primary/60 bg-primary/[0.07] shadow-[0_0_0_1px_rgb(124_92_255/0.3)]" : "border-white/[0.07] hover:border-white/15",
+        "relative flex flex-col items-start gap-3 rounded-2xl p-4 text-left transition",
+        active ? "bg-accent-soft ring-[1.5px] ring-ink" : "bg-surface-2/50 hover:bg-surface-2",
       )}
     >
       <div className="flex w-full items-center justify-between">
-        <span className="grid size-9 place-items-center rounded-lg border border-white/10 bg-white/[0.04]">
-          <Icon className="size-[18px] text-primary" />
+        <span className="grid size-9 place-items-center rounded-full bg-surface text-foreground shadow-soft">
+          <Icon className="size-[18px]" />
         </span>
-        <span className={cn("grid size-5 place-items-center rounded-full border", active ? "border-primary bg-primary text-white" : "border-white/15")}>
+        <span className={cn("grid size-5 place-items-center rounded-full border", active ? "border-control bg-control text-control-ink" : "border-ink/25")}>
           {active && <Check className="size-3" />}
         </span>
       </div>
@@ -124,8 +124,8 @@ function BackendCard({
         <div className="mt-0.5 text-[12.5px] text-muted-foreground">{sub}</div>
       </div>
       <div className="flex items-center gap-2 text-[12px]">
-        <span className={cn("size-2 rounded-full", ok == null ? "bg-zinc-500" : ok ? "bg-ok shadow-[0_0_8px_var(--ok)]" : "bg-warn")} />
-        <span className={ok ? "text-emerald-200" : "text-muted-foreground"}>{status}</span>
+        <span className={cn("size-2 rounded-full", ok == null ? "bg-ink-faint" : ok ? "bg-success" : "bg-warn")} />
+        <span className={ok ? "text-success-ink" : "text-muted-foreground"}>{status}</span>
       </div>
     </button>
   )
@@ -164,10 +164,10 @@ export function SettingsPage() {
   if (!brand || !app || !settings.data)
     return (
       <Page>
-        <Skeleton className="mb-8 h-10 w-60 bg-white/[0.04]" />
+        <Skeleton className="mb-8 h-10 w-60" />
         <div className="grid grid-cols-[1fr_340px] gap-6">
-          <Skeleton className="h-[900px] rounded-2xl bg-white/[0.04]" />
-          <Skeleton className="h-[600px] rounded-2xl bg-white/[0.04]" />
+          <Skeleton className="h-[900px] rounded-2xl" />
+          <Skeleton className="h-[600px] rounded-2xl" />
         </div>
       </Page>
     )
@@ -189,7 +189,7 @@ export function SettingsPage() {
             <Line label="Handle">
               <div className="relative max-w-xs">
                 <AtSign className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-subtle" />
-                <Input value={(brand.handle ?? "").replace(/^@/, "")} onChange={(e) => b("handle", e.target.value ? `@${e.target.value.replace(/^@/, "")}` : null)} className="bg-white/[0.03] pl-9" />
+                <Input value={(brand.handle ?? "").replace(/^@/, "")} onChange={(e) => b("handle", e.target.value ? `@${e.target.value.replace(/^@/, "")}` : null)} className="pl-9" />
               </div>
             </Line>
           </Section>
@@ -271,7 +271,7 @@ export function SettingsPage() {
           </Section>
 
           <Section icon={Sparkles} title="End card" sub="Presets and briefs can still switch it on or off">
-            <div className="flex items-center justify-between gap-6 rounded-xl border border-white/[0.06] bg-white/[0.02] p-4">
+            <div className="flex items-center justify-between gap-6 rounded-2xl bg-surface-2/60 p-4">
               <div>
                 <div className="text-[13.5px] font-medium">On by default</div>
                 <div className="text-[12.5px] text-muted-foreground">Your handle over a blurred last frame</div>
@@ -285,8 +285,8 @@ export function SettingsPage() {
 
           <Section id="brain" icon={Bot} title="Brain" sub="Who makes the editing decisions. Everything mechanical runs on your Mac either way.">
             {s?.demo && (
-              <div className="flex items-start gap-2.5 rounded-xl border border-primary/25 bg-primary/[0.07] p-3 text-[12.5px] text-violet-100">
-                <Sparkles className="mt-0.5 size-4 shrink-0 text-primary" />
+              <div className="flex items-start gap-2.5 rounded-2xl bg-accent-soft p-3.5 text-[12.5px] text-foreground">
+                <Sparkles className="mt-0.5 size-4 shrink-0" />
                 Demo mode: brain calls get scripted answers (CUTROOM_BRAIN=demo). Start without --demo to use the backend picked here.
               </div>
             )}
@@ -326,32 +326,32 @@ export function SettingsPage() {
               </Line>
             ) : (
               <Line label="Model">
-                <Input value={app.anthropic_model ?? ""} onChange={(e) => setApp({ ...app, anthropic_model: e.target.value })} className="max-w-xs bg-white/[0.03] font-mono text-[12.5px]" />
+                <Input value={app.anthropic_model ?? ""} onChange={(e) => setApp({ ...app, anthropic_model: e.target.value })} className="max-w-xs font-mono text-[12.5px]" />
               </Line>
             )}
-            {cc.hint && app.brain_backend === "claude-code" && !cc.logged_in && <p className="text-[12.5px] text-amber-200/80">{cc.hint}</p>}
+            {cc.hint && app.brain_backend === "claude-code" && !cc.logged_in && <p className="text-[12.5px] text-warn-ink">{cc.hint}</p>}
           </Section>
 
           <Section icon={Server} title="This Mac" sub="What the pipeline needs to plan and render">
             <div className="flex items-center justify-between">
-              <span className={cn("text-[13px]", s?.can_render ? "text-emerald-200" : "text-amber-200")}>
+              <span className={cn("text-[13px]", s?.can_render ? "text-success-ink" : "text-warn-ink")}>
                 {!s ? "Checking…" : s.can_render ? (s.can_plan ? "Ready to plan and render" : "Ready to render; the brain needs attention") : "Something needed for rendering is missing"}
               </span>
               <Button variant="ghost" size="sm" onClick={() => status.refetch()}>
                 <RotateCw className={status.isFetching ? "animate-spin" : ""} /> Check again
               </Button>
             </div>
-            <ul className="divide-y divide-white/[0.05] overflow-hidden rounded-xl border border-white/[0.06]">
+            <ul className="divide-y divide-border overflow-hidden rounded-2xl bg-surface-2/40 ring-1 ring-border">
               {(s?.checks ?? []).map((c) => (
                 <li key={c.id} className="flex items-center gap-3 px-4 py-2.5 text-[12.5px]">
-                  {c.ok ? <Check className="size-4 shrink-0 text-ok" /> : <CircleAlert className={cn("size-4 shrink-0", c.required ? "text-warn" : "text-subtle")} />}
-                  <span className="w-48 shrink-0 font-medium text-zinc-200 max-xl:w-36">{c.label}</span>
+                  {c.ok ? <Check className="size-4 shrink-0 text-success-ink" /> : <CircleAlert className={cn("size-4 shrink-0", c.required ? "text-warn-ink" : "text-subtle")} />}
+                  <span className="w-48 shrink-0 font-medium text-foreground max-xl:w-36">{c.label}</span>
                   <span className="min-w-0 flex-1 truncate text-muted-foreground" title={c.detail}>
                     {c.ok ? c.detail : (c.hint ?? c.detail)}
                   </span>
                 </li>
               ))}
-              {!s && <li className="px-4 py-3"><Skeleton className="h-4 w-1/2 bg-white/[0.05]" /></li>}
+              {!s && <li className="px-4 py-3"><Skeleton className="h-4 w-1/2" /></li>}
             </ul>
           </Section>
         </div>
@@ -363,7 +363,7 @@ export function SettingsPage() {
             <div className="grid grid-cols-[96px_1fr] items-center gap-4">
               <EndCardPreview handle={brand.handle ?? ""} backdrop={backdrop} on={!!brand.end_card} />
               <div className="text-[12.5px] text-muted-foreground">
-                <div className="font-medium text-zinc-300">End card</div>
+                <div className="font-medium text-foreground">End card</div>
                 {brand.end_card ? `${(brand.end_card_seconds ?? 1.5).toFixed(1)}s at the end of every video` : "Off unless a preset or brief turns it on"}
               </div>
             </div>
@@ -374,13 +374,14 @@ export function SettingsPage() {
       <AnimatePresence>
         {dirty > 0 && (
           <motion.div initial={{ y: 80, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 80, opacity: 0 }} className="fixed bottom-6 left-1/2 z-40 -translate-x-1/2">
-            <div className="flex items-center gap-4 rounded-2xl border border-white/10 bg-[#141418]/95 py-2.5 pr-2.5 pl-5 shadow-[0_20px_50px_-10px_rgb(0_0_0/0.8)] backdrop-blur-xl">
+            <div className="flex items-center gap-4 rounded-full bg-control py-2 pr-2 pl-5 text-control-ink shadow-lift">
               <span className="text-[13px]">
                 {dirty} unsaved change{dirty > 1 ? "s" : ""}
               </span>
               <Button
                 variant="ghost"
                 size="sm"
+                className="text-control-ink/80 hover:bg-control-ink/10 hover:text-control-ink"
                 onClick={() => {
                   setBrand(settings.data!.brand)
                   setApp(settings.data!.app)
@@ -390,6 +391,7 @@ export function SettingsPage() {
               </Button>
               <Button
                 size="sm"
+                variant="accent"
                 disabled={save.isPending}
                 onClick={() =>
                   save.mutate(
