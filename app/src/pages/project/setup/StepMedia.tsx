@@ -18,13 +18,14 @@ import { type ReactNode, useRef, useState } from "react"
 import { toast } from "sonner"
 import { fileContentUrl } from "@/api/client"
 import { keys, useDeleteFile, usePatchFile, useReorderFiles, useUpload } from "@/api/queries"
-import type { Project, ProjectFile } from "@/api/types"
+import type { Project, ProjectFile, Take } from "@/api/types"
 import { Thumb } from "@/components/Thumb"
 import { Button } from "@/components/ui/button"
 import { clock, pluralize } from "@/lib/format"
 import { cn } from "@/lib/utils"
 import { MusicPanel } from "./MusicPanel"
 import { PhotosPicker } from "./PhotosPicker"
+import { takeFile, VoiceRecorder } from "./VoiceRecorder"
 
 type Kind = "clip" | "voiceover" | "music"
 
@@ -72,7 +73,12 @@ const ZONES: Record<Kind, { title: string; sub: string; accept: string; icon: ty
     accept: "video/*,image/*,.heic,.heif,.mov,.mp4,.m4v",
     icon: Clapperboard,
   },
-  voiceover: { title: "Voiceover", sub: "A voice memo: M4A, WAV, MP3", accept: "audio/*,.m4a,.wav,.mp3,.aac,.caf", icon: Mic },
+  voiceover: {
+    title: "Voiceover",
+    sub: "A voice memo (M4A, WAV, MP3), or record one",
+    accept: "audio/*,.m4a,.wav,.mp3,.aac,.caf,.webm,.ogg,.opus",
+    icon: Mic,
+  },
   music: { title: "Music", sub: "The track to cut to", accept: "audio/*,.m4a,.wav,.mp3,.aac,.flac", icon: Music2 },
 }
 
@@ -131,7 +137,8 @@ function DropZone({
       )}
     >
       <div className={cn("flex flex-wrap items-center gap-x-4 gap-y-3", required ? "px-6 py-7" : "px-5 py-5")}>
-        <button type="button" onClick={() => input.current?.click()} className="group flex min-w-0 flex-1 items-center gap-4 text-left">
+        {/* min-w-44: in the narrow column the buttons wrap under the title instead of squeezing it */}
+        <button type="button" onClick={() => input.current?.click()} className="group flex min-w-44 flex-1 items-center gap-4 text-left">
           <span
             className={cn(
               "grid shrink-0 place-items-center rounded-2xl transition group-hover:scale-105",
@@ -335,6 +342,7 @@ export function StepMedia({ project }: { project: Project }) {
   const [progress, setProgress] = useState<Record<Kind, number | null>>({ clip: null, voiceover: null, music: null })
   const [dragging, setDragging] = useState<string | null>(null)
   const [photos, setPhotos] = useState(false)
+  const [recorder, setRecorder] = useState(false)
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
@@ -348,27 +356,39 @@ export function StepMedia({ project }: { project: Project }) {
   const visual = ordered.filter((f) => f.kind !== "voiceover")
   const mixed = (project.brief?.talking ?? "").startsWith("mixed")
 
-  const send = async (kind: Kind, list: File[]) => {
+  /** Upload to a slot. A recorded take goes the same way as a voice memo, with its id; it takes the place of the
+   * voiceover from an earlier take (replace). Returns what was added, or nothing when it failed. */
+  const send = async (kind: Kind, list: File[], take?: { take: Take; replace?: ProjectFile }) => {
     setProgress((p) => ({ ...p, [kind]: 0 }))
     try {
       const added = await upload.mutateAsync({
         files: list,
         kind: kind === "clip" ? undefined : kind,
+        take: take?.take.id,
         onProgress: (f) => setProgress((p) => ({ ...p, [kind]: f })),
       })
-      toast.success(`Added ${pluralize(added.length, "file")}`)
-      if (kind === "voiceover" && !mixed) {
+      toast.success(take ? `Take ${take.take.number} is your voiceover` : `Added ${pluralize(added.length, "file")}`)
+      const now = qc.getQueryData<Project>(keys.project(pid))?.files ?? []
+      const isNew = (f: ProjectFile) => added.some((a) => a.id === f.id)
+      if (take?.replace) {
+        const old = take.replace
+        await del.mutateAsync(old.id)
+        const rest = now.filter((f) => f.id !== old.id && !isNew(f))
+        const at = Math.max(0, now.findIndex((f) => f.id === old.id))
+        reorder.mutate([...rest.slice(0, at), ...added, ...rest.slice(at)].map((f) => f.id))
+      } else if (kind === "voiceover" && !mixed) {
         // a voiceover goes first in the edit order: every clip after it plays under it
-        const now = qc.getQueryData<Project>(keys.project(pid))?.files ?? []
-        const vo = now.filter((f) => added.some((a) => a.id === f.id))
+        const vo = now.filter(isNew)
         reorder.mutate([...vo, ...now.filter((f) => !vo.includes(f))].map((f) => f.id))
       }
+      return added
     } catch {
       /* the toast comes from the mutation */
     } finally {
       setProgress((p) => ({ ...p, [kind]: null }))
     }
   }
+  const sendTake = async (take: Take, replace?: ProjectFile) => !!(await send("voiceover", [await takeFile(pid, take)], { take, replace }))
 
   const onDragStart = (e: DragStartEvent) => setDragging(String(e.active.id))
   const onDragEnd = (e: DragEndEvent) => {
@@ -452,7 +472,16 @@ export function StepMedia({ project }: { project: Project }) {
       </div>
 
       <div className="flex flex-col gap-5">
-        <DropZone kind="voiceover" onFiles={(l) => send("voiceover", l)} progress={progress.voiceover}>
+        <DropZone
+          kind="voiceover"
+          onFiles={(l) => send("voiceover", l)}
+          progress={progress.voiceover}
+          action={
+            <Button type="button" size="sm" variant="outline" onClick={() => setRecorder(true)}>
+              <span className="size-2 rounded-full bg-destructive" /> Record
+            </Button>
+          }
+        >
           {ordered.some((f) => f.kind === "voiceover") && (
             <div className="border-t border-border px-5 py-3 text-[12.5px] text-muted-foreground">
               {ordered
@@ -460,7 +489,10 @@ export function StepMedia({ project }: { project: Project }) {
                 .map((f) => (
                   // removable here too: with no clips yet the edit order is folded away
                   <div key={f.id} className="flex items-center justify-between gap-2">
-                    <span className="truncate text-foreground">{f.name}</span>
+                    <span className="flex min-w-0 items-center gap-1.5">
+                      <span className="truncate text-foreground">{f.name}</span>
+                      {f.take && <span className="shrink-0 rounded-full bg-surface-2 px-1.5 py-px text-[10.5px] font-medium text-ink-soft">recorded</span>}
+                    </span>
                     <button onClick={() => del.mutate(f.id)} className="rounded-full p-1 transition hover:bg-ink/[0.06] hover:text-foreground" aria-label={`Remove ${f.name}`}>
                       <X className="size-3.5" />
                     </button>
@@ -472,6 +504,7 @@ export function StepMedia({ project }: { project: Project }) {
             </div>
           )}
         </DropZone>
+        <VoiceRecorder project={project} open={recorder} onOpenChange={setRecorder} onUse={sendTake} />
         <DropZone kind="music" onFiles={(l) => send("music", l)} progress={progress.music}>
           {music.map((f) => (
             <MusicRow key={f.id} file={f} pid={pid} onDelete={() => del.mutate(f.id)} />

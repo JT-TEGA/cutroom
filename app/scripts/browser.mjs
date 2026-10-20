@@ -5,13 +5,25 @@ export const BASE = process.env.CUTROOM_URL ?? "http://localhost:5173"
 export const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 
 /** Bundled Chrome for Testing by default; CUTROOM_CHROME=/path/to/Chrome to test a real install (newer Chromes
- * behave differently: Element.scrollTo() returns a Promise from Chrome 15x). */
-export async function launch(viewport = { width: 1440, height: 900, deviceScaleFactor: 2 }) {
+ * behave differently: Element.scrollTo() returns a Promise from Chrome 15x).
+ * mic: a WAV file the browser hears as its microphone (Chrome's fake capture device; the permission is granted). */
+export async function launch(viewport = { width: 1440, height: 900, deviceScaleFactor: 2 }, { mic } = {}) {
   const browser = await puppeteer.launch({
     headless: true,
     defaultViewport: viewport,
     executablePath: process.env.CUTROOM_CHROME || undefined,
-    args: ["--autoplay-policy=no-user-gesture-required"],
+    args: [
+      "--autoplay-policy=no-user-gesture-required",
+      // the audio service's sandbox can't open the file (the mic is then silent), so it's off for this test browser
+      ...(mic
+        ? [
+            "--use-fake-ui-for-media-stream",
+            "--use-fake-device-for-media-stream",
+            `--use-file-for-fake-audio-capture=${mic}%noloop`,
+            "--disable-features=AudioServiceSandbox",
+          ]
+        : []),
+    ],
   })
   console.log(`· browser ${await browser.version()}`)
   return browser

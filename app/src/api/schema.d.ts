@@ -287,7 +287,10 @@ export interface paths {
         /** List Files */
         get: operations["list_files_projects__pid__files_get"];
         put?: never;
-        /** Upload */
+        /**
+         * Upload
+         * @description A voiceover in a recording or video container (WebM/Ogg Opus, MP4...) is converted to .wav on the way in.
+         */
         post: operations["upload_projects__pid__files_post"];
         delete?: never;
         options?: never;
@@ -329,6 +332,52 @@ export interface paths {
         put?: never;
         post?: never;
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/projects/{pid}/takes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Takes
+         * @description The takes recorded for this project (inputs/voiceover/takes/), oldest first. Play one with
+         *     GET /media/file?path=<project id>/<take path>.
+         */
+        get: operations["list_takes_projects__pid__takes_get"];
+        put?: never;
+        /**
+         * Add Take
+         * @description Keep a recording as the next take. It isn't in the edit until it's used: upload it to POST .../files with
+         *     kind=voiceover and take=<id>, like any voice memo.
+         */
+        post: operations["add_take_projects__pid__takes_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/projects/{pid}/takes/{take_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete Take
+         * @description Delete a take. A voiceover already made from it stays in the project.
+         */
+        delete: operations["delete_take_projects__pid__takes__take_id__delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -799,6 +848,14 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
+        /** Body_add_take_projects__pid__takes_post */
+        Body_add_take_projects__pid__takes_post: {
+            /**
+             * File
+             * @description the recording: WebM/Ogg (Opus) or MP4 (AAC), as MediaRecorder makes it
+             */
+            file: string;
+        };
         /** Body_upload_projects__pid__files_post */
         Body_upload_projects__pid__files_post: {
             /**
@@ -816,6 +873,11 @@ export interface components {
              * @description group photos/clips like a folder (capture order)
              */
             folder?: string | null;
+            /**
+             * Take
+             * @description the recorded take this voiceover is (POST .../takes)
+             */
+            take?: string | null;
         };
         /**
          * BrandSettings
@@ -1583,6 +1645,11 @@ export interface components {
             /** Has Audio */
             has_audio?: boolean | null;
             /**
+             * Take
+             * @description the recorded take this voiceover came from (GET /projects/{id}/takes)
+             */
+            take?: string | null;
+            /**
              * Added At
              * Format: date-time
              */
@@ -2006,7 +2073,7 @@ export interface components {
              * @default full_disk_access
              * @enum {string}
              */
-            pane: "full_disk_access" | "photos" | "automation";
+            pane: "full_disk_access" | "photos" | "automation" | "microphone";
         };
         /**
          * SettingsUpdate
@@ -2149,6 +2216,39 @@ export interface components {
              * @default false
              */
             demo: boolean;
+        };
+        /**
+         * Take
+         * @description A voiceover recorded in the app. Takes stay in inputs/voiceover/takes/ (not in the edit) until one is used:
+         *     then it's uploaded as a voiceover like any voice memo, and converted to .wav on the way in.
+         */
+        Take: {
+            /**
+             * Id
+             * @description e.g. "take-3"
+             */
+            id: string;
+            /** Number */
+            number: number;
+            /**
+             * Path
+             * @description relative to the project folder; remuxed so it has a duration and seeks
+             */
+            path: string;
+            /** Duration */
+            duration: number;
+            /** Size */
+            size: number;
+            /**
+             * Peaks
+             * @description the waveform, evenly spaced over the take (0..1)
+             */
+            peaks?: number[];
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at?: string;
         };
         /**
          * TextOverlay
@@ -3102,6 +3202,102 @@ export interface operations {
             };
             /** @description partial content (Range request) */
             206: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_takes_projects__pid__takes_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                pid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Take"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    add_take_projects__pid__takes_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                pid: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_add_take_projects__pid__takes_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Take"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_take_projects__pid__takes__take_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                pid: string;
+                take_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
                 headers: {
                     [name: string]: unknown;
                 };

@@ -1,6 +1,6 @@
 import { keepPreviousData, useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
-import { api, call, uploadFiles } from "./client"
-import type { Brief, Job, JobKind, Project, ProjectFile, Settings, Timeline, TimelineView } from "./types"
+import { api, call, uploadFiles, uploadTake } from "./client"
+import type { Brief, Job, JobKind, Project, ProjectFile, Settings, Take, Timeline, TimelineView } from "./types"
 
 export const keys = {
   projects: ["projects"] as const,
@@ -8,6 +8,7 @@ export const keys = {
   timeline: (id: string) => ["timeline", id] as const,
   outputs: (id: string) => ["outputs", id] as const,
   voiceover: (id: string) => ["voiceover", id] as const,
+  takes: (id: string) => ["takes", id] as const,
   music: (id: string, fileId?: string) => ["music", id, fileId ?? ""] as const,
   photosStatus: ["photos", "status"] as const,
   photosAlbums: ["photos", "albums"] as const,
@@ -57,6 +58,15 @@ export function useVoiceover(id: string, enabled = true) {
   return useQuery({
     queryKey: keys.voiceover(id),
     queryFn: () => call(api.GET("/projects/{pid}/voiceover", { params: { path: { pid: id } } })),
+    enabled,
+  })
+}
+
+/** The voiceover takes recorded in the app (they're kept in the project, so they're back after a refresh). */
+export function useTakes(id: string, enabled = true) {
+  return useQuery({
+    queryKey: keys.takes(id),
+    queryFn: () => call(api.GET("/projects/{pid}/takes", { params: { path: { pid: id } } })),
     enabled,
   })
 }
@@ -128,7 +138,7 @@ export function useRefreshPhotos() {
 
 export function useOpenPrivacySettings() {
   return useMutation({
-    mutationFn: (pane: "full_disk_access" | "photos" | "automation") => call(api.POST("/photos/open-settings", { body: { pane } })),
+    mutationFn: (pane: "full_disk_access" | "photos" | "automation" | "microphone") => call(api.POST("/photos/open-settings", { body: { pane } })),
   })
 }
 
@@ -217,13 +227,33 @@ function setFiles(qc: ReturnType<typeof useQueryClient>, id: string, fn: (files:
 export function useUpload(id: string) {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (v: { files: File[]; kind?: "clip" | "photo" | "voiceover" | "music"; onProgress?: (f: number) => void }) =>
-      uploadFiles(id, v.files, { kind: v.kind, onProgress: v.onProgress }),
+    mutationFn: (v: { files: File[]; kind?: "clip" | "photo" | "voiceover" | "music"; take?: string; onProgress?: (f: number) => void }) =>
+      uploadFiles(id, v.files, { kind: v.kind, take: v.take, onProgress: v.onProgress }),
     onSuccess: (added) => setFiles(qc, id, (files) => [...files, ...added]),
     onSettled: () => {
       qc.invalidateQueries({ queryKey: keys.project(id) })
       qc.invalidateQueries({ queryKey: keys.projects })
     },
+  })
+}
+
+export function useSaveTake(id: string) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (v: { recording: Blob; name: string }) => uploadTake(id, v.recording, v.name),
+    meta: { silent: true }, // the recorder shows what went wrong, with Try again
+    onSuccess: (t) => qc.setQueryData<Take[]>(keys.takes(id), (list) => [...(list ?? []).filter((x) => x.id !== t.id), t]),
+    onSettled: () => qc.invalidateQueries({ queryKey: keys.takes(id) }),
+  })
+}
+
+export function useDeleteTake(id: string) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (takeId: string) =>
+      call(api.DELETE("/projects/{pid}/takes/{take_id}", { params: { path: { pid: id, take_id: takeId } } })),
+    onMutate: (takeId) => qc.setQueryData<Take[]>(keys.takes(id), (list) => list?.filter((t) => t.id !== takeId)),
+    onSettled: () => qc.invalidateQueries({ queryKey: keys.takes(id) }),
   })
 }
 

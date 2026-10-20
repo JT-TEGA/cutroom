@@ -22,6 +22,8 @@ export type BrandSettings = S["BrandSettings"]
 export type AppSettings = S["AppSettings"]
 export type SystemStatus = S["SystemStatus"]
 export type VoiceoverInfo = S["VoiceoverInfo"]
+/** A voiceover recorded in the app, kept until one is used. */
+export type Take = S["Take"]
 export type MusicInfo = S["MusicInfo"]
 export type InAppSound = S["InAppSound"]
 export type PhotosStatus = S["PhotosStatus"]

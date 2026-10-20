@@ -5,13 +5,17 @@
 //   node app/scripts/walkthrough.mjs        (CUTROOM_URL=http://localhost:5173 by default)
 //
 // A few side projects are created through the API (so the projects grid has something in every state); the main
-// one, "5AM chest day", goes through the UI: new video wizard -> questions -> plan -> timeline edits -> render ->
-// result -> revise -> v2. Screenshots (2x JPEG) land in docs/screenshots/.
+// one, "5AM chest day", goes through the UI: new video wizard -> voiceover recorded in the app -> questions -> plan
+// -> timeline edits -> render -> result -> revise -> v2. Screenshots (2x JPEG) land in docs/screenshots/.
+//
+// The recorder hears the demo voice memo through Chrome's fake microphone (--use-file-for-fake-audio-capture), so
+// the take that gets used is the same speech the planning step cleans up and transcribes.
 //
 // Along the way it leaves every screen and comes back (client-side, so screens really unmount), including in the
 // middle of planning and rendering, then sweeps every route; any page error or console error fails the run.
 // CUTROOM_CHROME=/Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome runs it in your own Chrome.
-import { mkdirSync, readFileSync } from "node:fs"
+import { execFileSync } from "node:child_process"
+import { existsSync, mkdirSync, readFileSync } from "node:fs"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
 import { assertNoErrorScreen, BASE, go, hop, launch, sleep, watchErrors } from "./browser.mjs"
@@ -28,6 +32,15 @@ const SKIP_SEED = PAGES_ONLY || SWEEP_ONLY || PHOTOS_DENIED || process.argv.incl
 mkdirSync(OUT, { recursive: true })
 
 const log = (...a) => console.log("·", ...a)
+
+// the fake mic: the voice memo as 48 kHz WAV (what Chrome's fake capture device plays), with a pause after it
+const MIC = path.join(MEDIA, "chest-day-vo-mic.wav")
+function micFile() {
+  const src = path.join(MEDIA, "chest-day-vo.m4a")
+  if (!existsSync(MIC))
+    execFileSync("ffmpeg", ["-hide_banner", "-loglevel", "error", "-y", "-i", src, "-af", "apad=pad_dur=4", "-ar", "48000", "-ac", "1", "-c:a", "pcm_s16le", MIC])
+  return Number(execFileSync("ffprobe", ["-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", src], { encoding: "utf8" }))
+}
 
 // ---------------------------------------------------------------- API helpers (seeding)
 
@@ -139,7 +152,8 @@ async function type(selector, text) {
 async function main() {
   if (!SKIP_SEED) await seed()
 
-  const browser = await launch()
+  const voSeconds = micFile()
+  const browser = await launch(undefined, { mic: MIC })
   page = await browser.newPage()
   watch = watchErrors(page)
 
@@ -157,7 +171,8 @@ async function main() {
     return finish(browser)
   }
   if (!PAGES_ONLY) {
-    await mainFlow()
+    await mainFlow(voSeconds)
+    await voiceoverExtras()
     await songFlow()
     await photosFlow()
     await inAppResult()
@@ -324,7 +339,101 @@ async function usageLimit() {
   await shot("19-usage-limit", 1500)
 }
 
-async function mainFlow() {
+/** The Voiceover card's recorder on the main project: a take dropped by leaving mid-take, one kept by closing the
+ * recorder mid-take (paused and resumed on the way), the whole voice memo as take 2, listening back, deleting take 1
+ * and using take 2, which goes into the Voiceover slot like an imported memo. */
+async function recordVoiceover(pid, voSeconds) {
+  const takes = async () => (await api(`/projects/${pid}/takes`)).map((t) => t.id)
+  const openRecorder = async () => {
+    await press("[data-testid='drop-voiceover'] button::-p-text(Record)")
+    await page.waitForSelector("[role='dialog'] [data-testid='record-tip']", { timeout: 10_000 })
+  }
+  const inDialog = (text) => press(`[role='dialog'] button::-p-text(${text})`)
+  const status = (s) => page.waitForSelector(`[data-testid='recorder'][data-status='${s}']`, { timeout: 20_000 })
+
+  // leaving the screen mid-take drops it (and lets go of the mic) without an error
+  await openRecorder()
+  await inDialog("Record")
+  await status("recording")
+  await sleep(1200)
+  await hop(page)
+  if ((await takes()).length) throw new Error("a take abandoned by leaving the screen was kept")
+
+  // take 1: live level and timer, pause / resume, then closing the recorder keeps it
+  await openRecorder()
+  await inDialog("Record")
+  await status("recording")
+  await page.waitForFunction(() => Number(document.querySelector("[data-testid='level-meter']")?.dataset.level) > 0.3, { timeout: 15_000 })
+  await sleep(2200)
+  await shot("03e-recording", 200)
+  await inDialog("Pause")
+  await status("paused")
+  await sleep(500)
+  await inDialog("Resume")
+  await status("recording")
+  await sleep(800)
+  await page.keyboard.press("Escape")
+  await waitText("Saved take 1", 20_000)
+  if ((await takes()).join() !== "take-1") throw new Error(`closing mid-take should keep it: ${await takes()}`)
+
+  // take 2: the whole memo; listen back
+  await openRecorder()
+  await page.waitForSelector("[data-testid='take-review'][data-take='take-1']", { timeout: 10_000 })
+  await inDialog("Re-record")
+  await status("recording")
+  await sleep(voSeconds * 1000 + 900)
+  await inDialog("Stop")
+  await page.waitForSelector("[data-testid='take-review'][data-take='take-2']", { timeout: 30_000 })
+  await press("button[aria-label='Play the take']")
+  await sleep(2500)
+  await shot("03f-takes", 200)
+  await press("button[aria-label='Pause the take']")
+
+  // keep take 2: delete take 1, use take 2
+  await press("[data-testid='takes'] [data-take='take-1']")
+  await page.waitForSelector("[data-testid='take-review'][data-take='take-1']", { timeout: 10_000 })
+  await inDialog("Delete")
+  await page.waitForSelector("[data-testid='take-review'][data-take='take-2']", { timeout: 10_000 })
+  if ((await takes()).join() !== "take-2") throw new Error(`Delete should leave take 2 only: ${await takes()}`)
+  await inDialog("Use this")
+  await waitText("Take 2 is your voiceover", 60_000)
+  await page.waitForFunction(() => !document.querySelector("[role='dialog']"), { timeout: 10_000 })
+  const vo = (await api(`/projects/${pid}/files`)).filter((f) => f.kind === "voiceover")
+  if (vo.length !== 1 || vo[0].take !== "take-2" || vo[0].name !== "take-2.wav" || Math.abs(vo[0].duration - voSeconds) > 2)
+    throw new Error(`the used take isn't the project's voiceover: ${JSON.stringify(vo)}`)
+  log(`voiceover: recorded 2 takes, kept take 2 (${vo[0].duration.toFixed(1)}s, ${vo[0].info})`)
+}
+
+/** A blocked mic explains itself (then Try again records once it's allowed), and Browse still works for a voice memo.
+ * On the BTS project, which is left as it was. */
+async function voiceoverExtras() {
+  const bts = (await api("/projects")).find((p) => p.name === "Studio shoot BTS")
+  await go(page, `/projects/${bts.id}/setup/media`)
+
+  // what Chrome does when the mic is blocked for the page
+  await page.evaluate(() => {
+    window.__gum = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices)
+    navigator.mediaDevices.getUserMedia = () => Promise.reject(new DOMException("Permission denied", "NotAllowedError"))
+  })
+  await press("[data-testid='drop-voiceover'] button::-p-text(Record)")
+  await press("[role='dialog'] button::-p-text(Record)")
+  await page.waitForSelector("[data-testid='mic-help'][data-problem='denied']", { timeout: 10_000 })
+  await shot("03g-mic-blocked", 500)
+  await page.evaluate(() => (navigator.mediaDevices.getUserMedia = window.__gum))
+  await press("[role='dialog'] button::-p-text(Try again)")
+  await page.waitForSelector("[data-testid='recorder'][data-status='recording']", { timeout: 15_000 })
+  await hop(page)
+  if ((await api(`/projects/${bts.id}/takes`)).length) throw new Error("the BTS project shouldn't keep a take")
+
+  await (await page.$('input[data-testid="upload-voiceover"]')).uploadFile(m("chest-day-vo.m4a"))
+  await waitText("chest-day-vo.m4a", 60_000)
+  await press("[data-testid='drop-voiceover'] button[aria-label='Remove chest-day-vo.m4a']")
+  await page.waitForFunction(() => !document.querySelector("[data-testid='drop-voiceover']").innerText.includes("chest-day-vo.m4a"), { timeout: 15_000 })
+  if ((await api(`/projects/${bts.id}/files`)).some((f) => f.kind === "voiceover")) throw new Error("the browsed voice memo wasn't removed")
+  log("voiceover: a blocked mic explains itself, Try again records; Browse adds and removes a memo")
+}
+
+async function mainFlow(voSeconds) {
   // 1. new video: content type
   await page.goto(`${BASE}/new`, { waitUntil: "networkidle0" })
   await waitText("Gym vlog")
@@ -351,8 +460,7 @@ async function mainFlow() {
   await waitText("Added 7 files", 120_000)
   await page.waitForSelector("[data-testid='edit-order'][data-state='expanded']", { timeout: 10_000 })
   if (await page.$("[data-testid='clips-required']")) throw new Error("the clips card still asks for a clip after 7 were added")
-  await (await page.$('input[data-testid="upload-voiceover"]')).uploadFile(m("chest-day-vo.m4a"))
-  await waitText("chest-day-vo.m4a", 60_000)
+  await recordVoiceover(pid, voSeconds)
   await (await page.$('input[data-testid="upload-music"]')).uploadFile(m("afro-drill-120.wav"))
   await waitText("afro-drill-120.wav", 60_000)
   await idle()
@@ -421,6 +529,10 @@ async function mainFlow() {
   // 8. the timeline
   await waitUrl(/\/plan$/, 120_000)
   await waitText("Review the plan")
+  // the recorded take went through the voiceover clean-up like any voice memo: there's a preview and the numbers
+  const [vo] = await api(`/projects/${pid}/voiceover`)
+  if (!vo?.preview?.endsWith("vo_preview.wav") || vo.stats?.lufs_after == null) throw new Error(`no clean-up for the recorded take: ${JSON.stringify(vo)}`)
+  log(`voiceover: cleaned ${vo.stats.lufs_before} -> ${vo.stats.lufs_after} LUFS, preview ${vo.preview}`)
   await idle()
   await shot("10-timeline", 2500)
   await page.locator('[data-shot="3"] button').click()

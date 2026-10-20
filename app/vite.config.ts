@@ -1,3 +1,4 @@
+/// <reference types="vitest/config" />
 import path from "node:path"
 import tailwindcss from "@tailwindcss/vite"
 import react from "@vitejs/plugin-react"
@@ -23,6 +24,8 @@ export default defineConfig({
       },
     },
   },
+  // component tests (npm test): jsdom, with the API answered by a fake server (src/test/setup.ts)
+  test: { environment: "jsdom", setupFiles: ["src/test/setup.ts"], include: ["src/**/*.test.{ts,tsx}"] },
   server: {
     port: Number(process.env.CUTROOM_APP_PORT ?? 5173),
     proxy: {

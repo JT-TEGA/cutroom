@@ -1,6 +1,6 @@
 import createClient from "openapi-fetch"
 import type { paths } from "./schema"
-import type { ProjectFile } from "./types"
+import type { ProjectFile, Take } from "./types"
 
 /** Everything goes through /api (Vite proxies it to the FastAPI server, WebSocket included). */
 export const API = "/api"
@@ -54,19 +54,32 @@ export async function call<T>(p: Promise<{ data?: T; error?: unknown; response: 
   return r.data as T
 }
 
-/** Upload files with progress (fetch can't report upload progress, XHR can). */
+/** Upload files with progress (fetch can't report upload progress, XHR can). A recorded take goes the same way, as a
+ * voiceover with its take id. */
 export function uploadFiles(
   pid: string,
   files: File[],
-  opts: { kind?: "clip" | "photo" | "voiceover" | "music"; onProgress?: (fraction: number) => void } = {},
+  opts: { kind?: "clip" | "photo" | "voiceover" | "music"; take?: string; onProgress?: (fraction: number) => void } = {},
 ): Promise<ProjectFile[]> {
+  const form = new FormData()
+  for (const f of files) form.append("files", f, f.name)
+  if (opts.kind) form.append("kind", opts.kind)
+  if (opts.take) form.append("take", opts.take)
+  return postForm<ProjectFile[]>(`/projects/${encodeURIComponent(pid)}/files`, form, opts.onProgress)
+}
+
+/** Keep a recording as the project's next take (it isn't in the edit until it's used). */
+export function uploadTake(pid: string, recording: Blob, name: string): Promise<Take> {
+  const form = new FormData()
+  form.append("file", recording, name)
+  return postForm<Take>(`/projects/${encodeURIComponent(pid)}/takes`, form)
+}
+
+function postForm<T>(path: string, form: FormData, onProgress?: (fraction: number) => void): Promise<T> {
   return new Promise((resolve, reject) => {
-    const form = new FormData()
-    for (const f of files) form.append("files", f, f.name)
-    if (opts.kind) form.append("kind", opts.kind)
     const xhr = new XMLHttpRequest()
-    xhr.open("POST", `${API}/projects/${encodeURIComponent(pid)}/files`)
-    xhr.upload.onprogress = (e) => e.lengthComputable && opts.onProgress?.(e.loaded / e.total)
+    xhr.open("POST", `${API}${path}`)
+    xhr.upload.onprogress = (e) => e.lengthComputable && onProgress?.(e.loaded / e.total)
     xhr.onerror = () => reject(OFFLINE)
     xhr.onload = () => {
       let body: unknown
@@ -75,7 +88,7 @@ export function uploadFiles(
       } catch {
         body = undefined
       }
-      if (xhr.status >= 200 && xhr.status < 300) resolve(body as ProjectFile[])
+      if (xhr.status >= 200 && xhr.status < 300) resolve(body as T)
       else reject(toApiError(body, { status: xhr.status, statusText: xhr.statusText } as Response))
     }
     xhr.send(form)
