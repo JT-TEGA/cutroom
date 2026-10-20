@@ -2,7 +2,7 @@
 
     project.json      brief (structured), files in edit order, questions/answers, status, renders, timestamps
     inputs/clips/     clips and photos (folders from an imported brief keep their name)
-    inputs/voiceover/ voice memos
+    inputs/voiceover/ voice memos (takes/: voiceovers recorded in the app, kept until one is picked)
     inputs/music/     tracks
     work/             transcripts, drafts, edl.json (the plan), contact sheets, jobs.log
     output/v1, v2...  renders: video, contact sheet, render.json and the plan that made it
@@ -11,9 +11,11 @@ A markdown brief still works: ``import_markdown()`` creates a project and copies
 """
 from __future__ import annotations
 
+import json
 import re
 import secrets
 import shutil
+import subprocess
 import threading
 from collections.abc import Iterator
 from contextlib import contextmanager
@@ -31,6 +33,14 @@ FileKind = Literal["clip", "photo", "voiceover", "music"]
 Status = Literal["new", "analysed", "planning", "planned", "rendering", "rendered", "error"]
 KIND_DIR = {"clip": "inputs/clips", "photo": "inputs/clips", "voiceover": "inputs/voiceover", "music": "inputs/music"}
 SUPPORTED = sorted(VIDEO_EXT | IMAGE_EXT | AUDIO_EXT)
+# a voiceover in a browser recording's container (WebM/Ogg Opus, Safari's MP4) or a video is converted to .wav on the
+# way in, so everything after it (clean-up, transcription, the mix) sees a plain voice memo
+VOICE_TO_WAV = VIDEO_EXT | {".ogg", ".opus"}
+TAKES_DIR = "inputs/voiceover/takes"
+# what MediaRecorder writes (Chrome/Firefox: WebM or Ogg Opus, Safari: MP4 AAC) -> the format a take is kept in
+TAKE_FORMATS = {".webm": "webm", ".ogg": "ogg", ".opus": "ogg", ".mp4": "m4a", ".m4a": "m4a", ".wav": "wav"}
+TAKE_RE = re.compile(r"take-(\d+)")
+TAKE_PEAKS = 120
 
 
 def now() -> datetime:
@@ -52,7 +62,21 @@ class ProjectFile(BaseModel):
     height: int | None = None
     fps: float | None = None
     has_audio: bool | None = None
+    take: str | None = Field(None, description="the recorded take this voiceover came from (GET /projects/{id}/takes)")
     added_at: datetime = Field(default_factory=now)
+
+
+class Take(BaseModel):
+    """A voiceover recorded in the app. Takes stay in inputs/voiceover/takes/ (not in the edit) until one is used:
+    then it's uploaded as a voiceover like any voice memo, and converted to .wav on the way in."""
+
+    id: str = Field(description='e.g. "take-3"')
+    number: int
+    path: str = Field(description="relative to the project folder; remuxed so it has a duration and seeks")
+    duration: float
+    size: int
+    peaks: list[float] = Field(default_factory=list, description="the waveform, evenly spaced over the take (0..1)")
+    created_at: datetime = Field(default_factory=now)
 
 
 class InAppSound(BaseModel):
@@ -149,6 +173,36 @@ def kind_for(name: str, kind: str | None = None) -> FileKind:
         raise EngineError(f"{name} is audio: say whether it's a voiceover or music (kind=voiceover|music)",
                           code="audio_kind_needed", status=422)
     return auto  # type: ignore[return-value]
+
+
+def _ffmpeg(name: str, args: list[Any]) -> None:
+    """Run ffmpeg on a recording; a file it can't read is the creator's problem (422), not a server error."""
+    from .common import CommandError, run
+    try:
+        run(["ffmpeg", "-hide_banner", "-loglevel", "error", "-y", *args])
+    except CommandError as e:
+        raise EngineError(f"{name}: can't read this recording", code="unsupported_media", status=422,
+                          hint=str(e).strip().splitlines()[-1][:200]) from e
+
+
+def voice_wav(src: Path, out: Path, name: str) -> None:
+    """A voiceover's audio as 48 kHz mono 16-bit WAV (what the voice clean-up works at)."""
+    _ffmpeg(name, ["-i", src, "-map", "0:a:0", "-vn", "-ac", "1", "-ar", "48000", "-c:a", "pcm_s16le", "-f", "wav",
+                   out])
+
+
+def audio_peaks(src: Path, n: int = TAKE_PEAKS) -> list[float]:
+    """n waveform points (0..1) for drawing a recording."""
+    import numpy as np
+
+    r = subprocess.run(["ffmpeg", "-hide_banner", "-loglevel", "error", "-i", str(src), "-map", "0:a:0", "-ac", "1",
+                        "-ar", "8000", "-f", "s16le", "-"], capture_output=True)
+    x = np.abs(np.frombuffer(r.stdout, np.int16).astype(np.float32)) / 32768
+    if r.returncode or not len(x):
+        return []
+    edges = np.linspace(0, len(x), n + 1).astype(int)
+    p = np.array([x[a:b].max() if b > a else 0.0 for a, b in zip(edges, edges[1:])])
+    return [round(float(v), 3) for v in np.clip(p / (np.percentile(p, 99) + 1e-9), 0, 1)]
 
 
 class ProjectStore:
@@ -282,28 +336,38 @@ class ProjectStore:
 
     def add_file(self, pid: str, filename: str, stream: IO[bytes] | Path, kind: str | None = None,
                  folder: str | None = None, trim_in: float | None = None, trim_out: float | None = None,
-                 position: int | None = None) -> ProjectFile:
-        """Copy an upload (a stream) or a local file into the project and check it's usable media."""
+                 position: int | None = None, take: str | None = None) -> ProjectFile:
+        """Copy an upload (a stream) or a local file into the project and check it's usable media.
+        A voiceover in a recording or video container (VOICE_TO_WAV) is kept as .wav."""
         self.get(pid)
         name = safe_name(filename)
         k = kind_for(name, kind)
-        dest = self._target(pid, k, name, folder)
+        to_wav = k == "voiceover" and Path(name).suffix.lower() in VOICE_TO_WAV
+        dest = self._target(pid, k, f"{Path(name).stem}.wav" if to_wav else name, folder)
         tmp = dest.with_name(dest.name + ".part")
+        raw = dest.with_name(dest.name + ".upload") if to_wav else tmp
         try:
-            if isinstance(stream, Path):
-                shutil.copy2(stream, tmp)
+            if isinstance(stream, Path) and to_wav:
+                raw = stream
+            elif isinstance(stream, Path):
+                shutil.copy2(stream, raw)
             else:
-                with tmp.open("wb") as f:
+                with raw.open("wb") as f:
                     shutil.copyfileobj(stream, f, length=1024 * 1024)
+            if to_wav:
+                voice_wav(raw, tmp, name)
             tmp.replace(dest)
             meta = self._probe(pid, dest, k)
         except BaseException:
-            tmp.unlink(missing_ok=True)
             dest.unlink(missing_ok=True)
             raise
+        finally:
+            tmp.unlink(missing_ok=True)
+            if raw != stream:
+                raw.unlink(missing_ok=True)
         pf = ProjectFile(id=secrets.token_hex(4), name=dest.name, path=str(dest.relative_to(self.dir(pid))), kind=k,
                          folder=safe_name(folder) if folder else None, size=dest.stat().st_size,
-                         trim_in=trim_in, trim_out=trim_out, **meta)
+                         trim_in=trim_in, trim_out=trim_out, take=take, **meta)
         with self.edit(pid) as proj:
             if position is None or position >= len(proj.files):
                 proj.files.append(pf)
@@ -363,6 +427,74 @@ class ProjectStore:
     def clip_refs(self, proj: Project) -> list[ClipRef]:
         """Edit order for the drafting step: clips, photos and voiceovers, trims applied (music is separate)."""
         return [ClipRef(src=f.path, in_=f.trim_in, out=f.trim_out) for f in proj.files if f.kind != "music"]
+
+    # ------------------------------------------------------------ recorded takes
+
+    def _takes_index(self, pid: str) -> Path:
+        return self.dir(pid) / TAKES_DIR / "takes.json"
+
+    def takes(self, pid: str) -> list[Take]:
+        """The voiceover takes recorded in the app, oldest first."""
+        self.get(pid)
+        f = self._takes_index(pid)
+        try:
+            index = [Take.model_validate(t) for t in json.loads(f.read_text())] if f.exists() else []
+        except ValueError:
+            index = []
+        return [t for t in index if (self.dir(pid) / t.path).is_file()]
+
+    def add_take(self, pid: str, filename: str, stream: IO[bytes]) -> Take:
+        """Keep a browser recording as the next take: remuxed (MediaRecorder's WebM has no duration and doesn't seek),
+        checked for audio, with its waveform."""
+        from .common import ffprobe
+        proj = self.get(pid)
+        ext = Path(filename).suffix.lower()
+        if ext not in TAKE_FORMATS:
+            raise EngineError(f"{filename}: not a recording format the app makes", code="unsupported_file",
+                              status=415, hint="Takes are WebM or Ogg (Opus), MP4 (AAC) or WAV")
+        d = self.dir(pid) / TAKES_DIR
+        d.mkdir(parents=True, exist_ok=True)
+        with self._lock(pid):
+            used = [t.id for t in self.takes(pid)] + [f.take for f in proj.files if f.take]
+            number = 1 + max((int(m.group(1)) for x in used if (m := TAKE_RE.fullmatch(x or ""))), default=0)
+            tid = f"take-{number}"
+            fmt = TAKE_FORMATS[ext]
+            dest = d / f"{tid}.{'m4a' if fmt == 'm4a' else fmt}"
+            raw, tmp = d / f"{tid}.upload", d / f"{tid}.part"
+            try:
+                with raw.open("wb") as f:
+                    shutil.copyfileobj(stream, f, length=1024 * 1024)
+                _ffmpeg(filename, ["-i", raw, "-map", "0:a:0", "-vn", "-c", "copy",
+                                   "-f", {"m4a": "ipod"}.get(fmt, fmt), tmp])
+                info = ffprobe(tmp)
+                if not info.get("has_audio") or info["duration"] < 0.3:
+                    raise EngineError("That take is empty: nothing was recorded", code="empty_take", status=422,
+                                      hint="Check the mic is on and its level moves while you talk")
+                tmp.replace(dest)
+            finally:
+                raw.unlink(missing_ok=True)
+                tmp.unlink(missing_ok=True)
+            take = Take(id=tid, number=number, path=str(dest.relative_to(self.dir(pid))),
+                        duration=round(info["duration"], 3), size=dest.stat().st_size, peaks=audio_peaks(dest))
+            self._save_takes(pid, [*self.takes(pid), take])
+        return take
+
+    def remove_take(self, pid: str, take_id: str) -> None:
+        """Delete a take. A voiceover already made from it stays (it's a copy)."""
+        with self._lock(pid):
+            takes = self.takes(pid)
+            t = next((x for x in takes if x.id == take_id), None)
+            if t is None:
+                raise EngineError(f"no take {take_id!r} in project {pid}", code="take_not_found", status=404)
+            (self.dir(pid) / t.path).unlink(missing_ok=True)
+            self._save_takes(pid, [x for x in takes if x.id != take_id])
+
+    def _save_takes(self, pid: str, takes: list[Take]) -> None:
+        f = self._takes_index(pid)
+        f.parent.mkdir(parents=True, exist_ok=True)
+        tmp = f.with_name(f.name + ".tmp")
+        tmp.write_text(json.dumps([t.model_dump(mode="json") for t in takes], indent=2))
+        tmp.replace(f)
 
     # ------------------------------------------------------------ markdown briefs
 

@@ -40,10 +40,11 @@ def refresh(svc: Services = Depends(services)) -> PhotosStatus:
 
 
 class SettingsPane(BaseModel):
-    pane: Literal["full_disk_access", "photos", "automation"] = "full_disk_access"
+    pane: Literal["full_disk_access", "photos", "automation", "microphone"] = "full_disk_access"
 
 
-PANES = {"full_disk_access": "Privacy_AllFiles", "photos": "Privacy_Photos", "automation": "Privacy_Automation"}
+PANES = {"full_disk_access": "Privacy_AllFiles", "photos": "Privacy_Photos", "automation": "Privacy_Automation",
+         "microphone": "Privacy_Microphone"}   # the voiceover recorder, when macOS blocks the browser's mic
 
 
 @router.post("/photos/open-settings", status_code=status.HTTP_204_NO_CONTENT)

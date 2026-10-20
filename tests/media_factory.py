@@ -55,6 +55,27 @@ def music(path: Path, seconds: float = 12.0, bpm: float = 120.0, sr: int = 44100
     return path
 
 
+# MediaRecorder's output in each browser: Chrome/Edge WebM Opus (no duration, no cues: written live), Firefox Ogg
+# Opus, Safari fragmented MP4 AAC
+RECORDER = {
+    "webm": ["-c:a", "libopus", "-b:a", "96k", "-f", "webm", "-live", "1"],
+    "ogg": ["-c:a", "libopus", "-b:a", "96k", "-f", "ogg"],
+    "mp4": ["-c:a", "aac", "-b:a", "128k", "-f", "mp4", "-movflags", "frag_keyframe+empty_moov"],
+}
+
+
+def recording(path: Path, seconds: float = 2.5, fmt: str = "webm", sr: int = 48000) -> Path:
+    """A voice-like take as a browser's MediaRecorder would save it: a 160 Hz buzz in four "syllables" with pauses."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    t = np.arange(int(seconds * sr)) / sr
+    voice = sum(np.sin(2 * np.pi * 160 * k * t) / k for k in range(1, 6))
+    envelope = np.clip(np.sin(2 * np.pi * t * 1.6), 0, None) ** 0.5
+    x = (0.3 * voice * envelope + 0.002 * np.random.default_rng(1).standard_normal(len(t))).astype(np.float32)
+    subprocess.run(FF + ["-f", "f32le", "-ar", str(sr), "-ac", "1", "-i", "-", *RECORDER[fmt], str(path)],
+                   input=x.tobytes(), check=True)
+    return path
+
+
 def make_set(root: Path) -> dict[str, Path]:
     """Two clips, a photo and a music track under root."""
     return {
