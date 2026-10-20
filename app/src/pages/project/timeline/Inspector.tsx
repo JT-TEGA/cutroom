@@ -1,12 +1,14 @@
-import { AlertTriangle, ArrowLeftRight, Film, Loader2, Music2, Quote, Repeat2, Send, Sparkles, Trash2, Type, Wind, Zap, ZoomIn } from "lucide-react"
+import { AlertTriangle, ArrowLeftRight, Film, Loader2, Music2, Plus, Quote, Repeat2, Scissors, Send, Sparkles, Trash2, Type, Wind, Zap, ZoomIn } from "lucide-react"
 import { type ReactNode, useEffect, useState } from "react"
 import type { Project, ProjectFile, ResolvedShot, TextOverlay, Timeline, TimelineView } from "@/api/types"
 import { Thumb } from "@/components/Thumb"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { Switch } from "@/components/ui/switch"
 import { Textarea } from "@/components/ui/textarea"
 import { basename, clock, secs, tc } from "@/lib/format"
+import { lengthMode, MIN_SHOT } from "@/lib/timeline-edit"
 import { cn } from "@/lib/utils"
 import { shotSrc, type Selection } from "./Track"
 
@@ -71,22 +73,141 @@ function SwapPicker({ files, pid, current, onPick }: { files: ProjectFile[]; pid
   )
 }
 
+const num = (v: string) => (v.trim() === "" ? NaN : Number(v))
+const fmt = (x: number) => String(Math.round(x * 100) / 100)
+
+function Field({ label, value, onChange, onCommit, hint }: { label: string; value: string; onChange: (v: string) => void; onCommit: () => void; hint?: string }) {
+  return (
+    <label className="grid gap-1">
+      <span className="text-[11.5px] text-muted-foreground">{label}</span>
+      <Input
+        inputMode="decimal"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        onKeyDown={(e) => e.key === "Enter" && onCommit()}
+        className="h-8 font-mono text-[12.5px]"
+        aria-label={label}
+      />
+      {hint && <span className="text-[11px] text-subtle">{hint}</span>}
+    </label>
+  )
+}
+
+/** Trim a clip (start / end of the source) or set a shot's length in seconds. */
+function LengthEditor({
+  s,
+  view,
+  clipDur,
+  onTrim,
+  onDuration,
+}: {
+  s: ResolvedShot
+  view: TimelineView
+  clipDur?: number | null
+  onTrim: (inS: number, outS: number) => void
+  onDuration: (dur: number) => void
+}) {
+  const mode = lengthMode(view.timeline, s.segment, s.shot)
+  const [a, setA] = useState(fmt(s.in))
+  const [b, setB] = useState(fmt(s.out))
+  const [d, setD] = useState(fmt(s.duration))
+  useEffect(() => {
+    setA(fmt(s.in))
+    setB(fmt(s.out))
+    setD(fmt(s.duration))
+  }, [s.idx, s.in, s.out, s.duration])
+  if (!mode.trim && !mode.dur)
+    return (
+      <div>
+        <div className="mb-1 text-[12px] font-medium text-muted-foreground">Length</div>
+        <div className="text-[12px] text-subtle">{mode.why}</div>
+      </div>
+    )
+  const trimChanged = mode.trim && (num(a) !== Math.round(s.in * 100) / 100 || num(b) !== Math.round(s.out * 100) / 100)
+  const durChanged = num(d) !== Math.round(s.duration * 100) / 100
+  const commitTrim = () => trimChanged && onTrim(num(a), num(b))
+  const commitDur = () => durChanged && onDuration(num(d))
+  return (
+    <div>
+      <div className="mb-2 flex items-center gap-1.5 text-[12px] font-medium text-muted-foreground">
+        <Scissors className="size-3.5" /> Length
+      </div>
+      <div className="grid gap-2.5 rounded-2xl border border-border p-3">
+        {mode.trim && (
+          <div className="grid grid-cols-[1fr_1fr_auto] items-end gap-2">
+            <Field label="Start (s)" value={a} onChange={setA} onCommit={commitTrim} />
+            <Field label="End (s)" value={b} onChange={setB} onCommit={commitTrim} />
+            <Button size="sm" variant="outline" className="h-8" disabled={!trimChanged} onClick={commitTrim}>
+              Trim
+            </Button>
+            {clipDur != null && <span className="col-span-3 -mt-1 text-[11px] text-subtle">of the clip ({fmt(clipDur)} s long)</span>}
+          </div>
+        )}
+        <div className="grid grid-cols-[1fr_auto] items-end gap-2">
+          <Field
+            label="Plays for (s)"
+            value={d}
+            onChange={setD}
+            onCommit={commitDur}
+            hint={s.voiceover ? "It keeps its start; the next shot starts right after it (instead of on its cue)." : s.beat_synced ? "Sets it off the beat grid." : `At least ${MIN_SHOT} s; B-roll reads best at 1 s+.`}
+          />
+          <Button size="sm" variant="outline" className="mb-auto mt-[18px] h-8" disabled={!durChanged} onClick={commitDur}>
+            Set
+          </Button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function AddText({ onAdd }: { onAdd: (text: string) => void }) {
+  const [text, setText] = useState("")
+  const add = () => {
+    if (!text.trim()) return
+    onAdd(text.trim())
+    setText("")
+  }
+  return (
+    <div>
+      <div className="mb-2 flex items-center gap-1.5 text-[12px] font-medium text-muted-foreground">
+        <Type className="size-3.5" /> Text on this shot
+      </div>
+      <div className="flex gap-2">
+        <Input name="new-text" value={text} onChange={(e) => setText(e.target.value)} onKeyDown={(e) => e.key === "Enter" && add()} placeholder="e.g. Incline bench" className="h-8 text-[13px]" />
+        <Button size="sm" variant="outline" className="h-8" disabled={!text.trim()} onClick={add}>
+          <Plus /> Add
+        </Button>
+      </div>
+    </div>
+  )
+}
+
 function ShotPanel({
   s,
   view,
   pid,
   files,
+  clipDur,
   onTransition,
   onSwap,
   onDelete,
+  onTrim,
+  onDuration,
+  onCaptions,
+  onAddText,
 }: {
   s: ResolvedShot
   view: TimelineView
   pid: string
   files: ProjectFile[]
+  clipDur?: number | null
   onTransition: (t: string | null) => void
   onSwap: (f: ProjectFile) => void
   onDelete: () => void
+  onTrim: (inS: number, outS: number) => void
+  onDuration: (dur: number) => void
+  onCaptions: (on: boolean) => void
+  onAddText: (text: string) => void
 }) {
   const src = shotSrc(view, s)
   const seg = view.timeline.segments[s.segment]
@@ -94,6 +215,8 @@ function ShotPanel({
   const swappable = s.kind === "clip" || s.kind === "image"
   const words = s.heard ?? s.said
   const role = { voice: "your voice", ambient: "its own sound", mute: "muted (music / voiceover)" }[s.role] ?? s.role
+  const spoken = Boolean(s.voiceover || (s.said && s.role === "voice"))
+  const captionsOn = seg.captions !== false
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-start justify-between gap-3">
@@ -132,6 +255,22 @@ function ShotPanel({
         {s.speed !== 1 && <Row k="Speed">{`${s.speed}×${s.ramp ? " (ramp)" : ""}`}</Row>}
         <Row k="On the beat">{s.beat_synced ? "yes" : "no"}</Row>
       </div>
+
+      <LengthEditor s={s} view={view} clipDur={clipDur} onTrim={onTrim} onDuration={onDuration} />
+
+      {spoken && (
+        <label className="flex items-center justify-between gap-3 rounded-2xl border border-border px-4 py-3">
+          <span>
+            <span className="block text-[12.5px] font-medium text-foreground">{s.voiceover ? "Captions on this voiceover part" : "Captions on this shot"}</span>
+            <span className="block text-[11.5px] text-muted-foreground">
+              {view.captions?.enabled ? (s.voiceover ? "Applies to every B-roll shot under it." : "The words said here.") : "Captions are off for the whole video."}
+            </span>
+          </span>
+          <Switch aria-label="Captions on this part" checked={captionsOn} disabled={!view.captions?.enabled} onCheckedChange={(v) => onCaptions(v)} />
+        </label>
+      )}
+
+      <AddText onAdd={onAddText} />
 
       {s.idx > 1 && (
         <div>
@@ -227,7 +366,19 @@ function TextPanel({ item, span, onChange, onDelete }: { item: TextOverlay; span
   )
 }
 
-function Overview({ view, project, onRevise, revising }: { view: TimelineView; project: Project; onRevise: (notes: string) => void; revising: boolean }) {
+function Overview({
+  view,
+  project,
+  onRevise,
+  revising,
+  onEndCard,
+}: {
+  view: TimelineView
+  project: Project
+  onRevise: (notes: string) => void
+  revising: boolean
+  onEndCard: (on: boolean) => void
+}) {
   const [notes, setNotes] = useState("")
   const texts = view.overlays.filter((o) => o.kind === "text").length
   const broll = view.overlays.filter((o) => o.kind === "broll").length
@@ -254,7 +405,13 @@ function Overview({ view, project, onRevise, revising }: { view: TimelineView; p
             </span>
           </Row>
         )}
-        <Row k="End card">{view.end_card ? String(view.end_card.handle) : "off"}</Row>
+        <div className="flex items-center justify-between gap-4 py-1.5 text-[12.5px]">
+          <span className="shrink-0 text-muted-foreground">End card</span>
+          <span className="flex min-w-0 items-center gap-2.5">
+            <span className="truncate text-foreground">{view.end_card ? String(view.end_card.handle) : "off"}</span>
+            <Switch size="sm" aria-label="End card" checked={Boolean(view.end_card)} onCheckedChange={(v) => onEndCard(v)} />
+          </span>
+        </div>
       </div>
       {(view.notes?.length ?? 0) > 0 && (
         <div>
@@ -304,6 +461,12 @@ export function Inspector({
   onDeleteText,
   onRevise,
   revising,
+  clipDur,
+  onTrim,
+  onDuration,
+  onCaptions,
+  onAddText,
+  onEndCard,
 }: {
   view: TimelineView
   project: Project
@@ -316,6 +479,13 @@ export function Inspector({
   onDeleteText: (index: number) => void
   onRevise: (notes: string) => void
   revising: boolean
+  /** a source file's length in seconds, by its path in the plan */
+  clipDur: (src: string | null | undefined) => number | null | undefined
+  onTrim: (s: ResolvedShot, inS: number, outS: number) => void
+  onDuration: (s: ResolvedShot, dur: number) => void
+  onCaptions: (s: ResolvedShot, on: boolean) => void
+  onAddText: (s: ResolvedShot, text: string) => void
+  onEndCard: (on: boolean) => void
 }) {
   const tl: Timeline = view.timeline
   if (selection?.type === "shot") {
@@ -327,9 +497,14 @@ export function Inspector({
           view={view}
           pid={project.id}
           files={files}
+          clipDur={clipDur(shotSrc(view, s))}
           onTransition={(t) => onTransition(s, t)}
           onSwap={(f) => onSwap(s, f)}
           onDelete={() => onDeleteShot(s)}
+          onTrim={(a, b) => onTrim(s, a, b)}
+          onDuration={(d) => onDuration(s, d)}
+          onCaptions={(on) => onCaptions(s, on)}
+          onAddText={(t) => onAddText(s, t)}
         />
       )
   }
@@ -366,5 +541,5 @@ export function Inspector({
         </div>
       )
   }
-  return <Overview view={view} project={project} onRevise={onRevise} revising={revising} />
+  return <Overview view={view} project={project} onRevise={onRevise} revising={revising} onEndCard={onEndCard} />
 }

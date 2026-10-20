@@ -17,7 +17,7 @@ import shutil
 from pathlib import Path
 from typing import Any
 
-from . import autocut, contact_sheet, voice
+from . import autocut, contact_sheet, learn, voice
 from . import brief as B
 from . import edl as E
 from . import render as R
@@ -240,13 +240,18 @@ def plan(store: ProjectStore, pid: str, brain: Brain) -> T.TimelineView:
         step("brain: build the plan", 75)
         talking = {f.path: bool((load_transcript(f.path, auto=False) or {}).get("words")) for f in proj.files
                    if f.kind == "clip" and talk in ("yes", "some", "mixed")}
+        learned = learn.for_project(learn.preset_of(proj.brief, draft), proj.brief)
         res = brain_plan.build(
             brain, proj.brief, _transcripts(proj, talk), _file_info(proj, talking), a["preset"],
             draft=draft, draft_view=draft_view, analysis=a, cwd=cwd, known_files=_known(proj),
-            answers=answers_text(proj.questions, proj.answers), style_spec=proj.style_spec, matches=matches)
-        write_json(cwd / "work" / "plan_changes.json", {"summary": res.summary, "changes": res.changes})
+            answers=answers_text(proj.questions, proj.answers), style_spec=proj.style_spec, matches=matches,
+            learned=learn.prompt_text(learned.items))
+        write_json(cwd / "work" / "plan_changes.json", {"summary": res.summary, "changes": res.changes,
+                                                         "learned": [x.key for x in learned.items
+                                                                     if x.state == "applied"]})
         step("save", 97)
         view = _save_plan(store, pid, res.timeline, res.summary)
+        learn.proposal(cwd, res.timeline, fresh=True)
     step("done", 100)
     return view
 
@@ -348,6 +353,12 @@ def render(store: ProjectStore, pid: str, draft: bool = False) -> RenderInfo:
     proj = store.get(pid)
     if not (store.dir(pid) / "work" / "edl.json").exists():
         raise EngineError("this project has no plan yet: run plan first", code="no_plan", status=409)
+    if not draft:       # "Approve & render": what the creator changed in Claude's plan becomes edit notes
+        try:
+            learn.capture(store, pid)
+        except Exception as e:      # learning never stops a render
+            with store.context(pid):
+                log(f"  ! learning from your edits failed: {e}")
     _set_status(store, pid, "rendering")
     with store.context(pid):
         res = R.render(pid, draft=draft, music=music_choice(proj))
@@ -377,6 +388,7 @@ def revise(store: ProjectStore, pid: str, notes: str, brain: Brain) -> T.Timelin
             cur_view = T.view(current)
         except EngineError:
             cur_view = None
+        learn.carry(cwd, current)
         step("brain: apply the notes", 20)
         res = brain_revise.revise(brain, current, notes, cwd=cwd, brief=proj.brief, clip_info=_file_info(proj),
                                   transcripts=_transcripts(proj, current.talk or "some"), known_files=_known(proj),
@@ -385,6 +397,7 @@ def revise(store: ProjectStore, pid: str, notes: str, brain: Brain) -> T.Timelin
                    {"notes": notes, "summary": res.summary, "changes": res.changes})
         step("save", 95)
         view = _save_plan(store, pid, res.timeline, res.summary)
+        learn.proposal(cwd, res.timeline, fresh=False)
     step("done", 100)
     return view
 

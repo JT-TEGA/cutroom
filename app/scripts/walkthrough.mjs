@@ -537,6 +537,64 @@ async function mainFlow(voSeconds) {
   await shot("10-timeline", 2500)
   await page.locator('[data-shot="3"] button').click()
   await shot("11-timeline-shot", 1500)
+
+  // the plan screen's own edits: each one saves through PUT /timeline (the pre-render check) and leaves a plan
+  // with no problems
+  const before = new Set((await api(`/projects/${pid}/timeline`)).problems ?? [])
+  const planOk = async (what) => {
+    await idle()
+    const v = await api(`/projects/${pid}/timeline`)
+    const added = (v.problems ?? []).filter((p) => !before.has(p))
+    if (added.length) throw new Error(`${what} left problems: ${added.join("; ")}`)
+    return v
+  }
+  const toastSays = (text) => waitText(text, 15_000)
+  const setField = async (label, value) => {
+    await page.click(`input[aria-label="${label}"]`, { clickCount: 3 })
+    await page.keyboard.type(String(value))
+  }
+  const plays = await page.$('input[aria-label="Plays for (s)"]')
+  if (plays) {
+    const cur = Number(await plays.evaluate((el) => el.value))
+    const next = Math.max(1, Math.round((cur - 0.3) * 10) / 10)
+    await setField("Plays for (s)", next)
+    await click("Set")
+    await toastSays(`now plays for ${next} s`)
+    const v = await planOk("setting a length")
+    const got = v.shots.find((s) => s.idx === 3).duration
+    if (Math.abs(got - next) > 0.05) throw new Error(`shot 3 should play for ${next} s, plays for ${got} s`)
+    log(`length: shot 3 ${cur} s -> ${got.toFixed(2)} s`)
+  }
+  const capSwitch = await page.$('button[aria-label="Captions on this part"]')
+  if (capSwitch) {
+    await capSwitch.click()
+    await toastSays("Captions off")
+    await planOk("captions off")
+    await page.click('button[aria-label="Captions on this part"]')
+    await toastSays("Captions on")
+    await planOk("captions on")
+  }
+  await type('input[name="new-text"]', "Chest day")
+  await click("Add")
+  await toastSays("Text added")
+  const withText = await planOk("adding text")
+  if (!withText.overlays.some((o) => o.kind === "text" && o.text === "Chest day")) throw new Error("the new text isn't on the timeline")
+  await waitText("Text on screen")
+  await shot("11b-timeline-add-text", 900)
+  await click("Remove text")
+  await toastSays("Text removed")
+  await planOk("removing text")
+  await page.keyboard.press("Escape")
+  await waitText("The plan")
+  const card = await page.$eval('button[aria-label="End card"]', (el) => el.getAttribute("aria-checked"))
+  await page.click('button[aria-label="End card"]')
+  await toastSays(card === "true" ? "End card off" : "End card on")
+  await planOk("the end card toggle")
+  await shot("11c-timeline-end-card", 900)
+  await page.click('button[aria-label="End card"]')
+  await toastSays(card === "true" ? "End card on" : "End card off")
+  await planOk("the end card toggle")
+
   const textPill = await page.$("button[title='5:30AM']")
   if (textPill) {
     await textPill.click()

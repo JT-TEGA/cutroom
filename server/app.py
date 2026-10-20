@@ -20,7 +20,7 @@ from engine import __version__, pipeline
 from engine.config import EngineError, paths
 
 from .deps import Services
-from .routes import config_routes, files, jobs, media, photos, projects
+from .routes import config_routes, files, jobs, learned, media, photos, projects
 
 TAGS = [
     {"name": "projects", "description": "One video per project: brief, files, status."},
@@ -30,6 +30,7 @@ TAGS = [
     {"name": "media", "description": "Streaming (HTTP range) and thumbnails."},
     {"name": "config", "description": "Presets, brand + app settings, system status."},
     {"name": "photos", "description": "Import from the Mac Photos app (osxphotos): albums, items, thumbnails."},
+    {"name": "learned", "description": "Preferences learned from your edits to Claude's plans, per content type."},
 ]
 
 
@@ -64,7 +65,8 @@ def create_app(services: Services | None = None) -> FastAPI:
     def root() -> dict[str, str]:
         return {"name": "Cutroom API", "version": __version__, "docs": "/docs"}
 
-    for r in (projects.router, files.router, jobs.router, media.router, config_routes.router, photos.router):
+    for r in (projects.router, files.router, jobs.router, media.router, config_routes.router, photos.router,
+              learned.router):
         app.include_router(r)
     return app
 

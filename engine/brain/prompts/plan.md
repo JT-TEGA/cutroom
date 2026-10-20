@@ -17,6 +17,9 @@ the final plan.
   timestamp / lower3 / card / macros / credits / label / title-minimal...). Anchor them with `"on"` (a segment label
   or "#n", counting shots as listed in the draft view, where each B-roll shot in a voiceover block is one) so they
   move with their shot, or `"cue"` to appear when a phrase is said.
+- "The creator's observed preferences", when given, are what this creator kept changing in your past plans for
+  this content type. Follow them over the preset's defaults; the brief still wins, and they never break a hard rule
+  (text durations, safe zones, B-roll at least 1 s, input files only). Note in `notes` where one shaped a decision.
 - Keep `style`, `beat_sync` and `music` from the draft unless the brief says otherwise; they already hold the brief's
   overrides.
 - Fix misheard caption words in `captions.replace`.

@@ -31,7 +31,20 @@ import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { clock, pluralize } from "@/lib/format"
-import { deleteShot, deleteText, moveSegment, pinAnchors, setTransition, swapSource, updateText } from "@/lib/timeline-edit"
+import {
+  addText,
+  deleteShot,
+  deleteText,
+  moveSegment,
+  pinAnchors,
+  setCaptions,
+  setDuration,
+  setEndCard,
+  setTransition,
+  swapSource,
+  trimShot,
+  updateText,
+} from "@/lib/timeline-edit"
 import { cn } from "@/lib/utils"
 import { useProjectCtx } from "../ProjectLayout"
 import { Inspector } from "./Inspector"
@@ -103,9 +116,22 @@ export function TimelineReview() {
   const apply = useCallback(
     (next: Timeline, message?: string) => {
       if (!view) return
-      setHistory((h) => [...h.slice(-19), view.timeline])
+      const prev = view.timeline
+      const had = new Set(view.problems ?? [])
+      setHistory((h) => [...h.slice(-19), prev])
       save.mutate(next, {
-        onSuccess: () => message && toast.success(message),
+        onSuccess: (saved) => {
+          // the save ran the pre-render check: an edit that makes the plan worse (a shot pushed past the end of its
+          // clip...) is taken back, with what it would have done
+          const added = (saved.problems ?? []).filter((p) => !had.has(p))
+          if (added.length) {
+            setHistory((h) => h.slice(0, -1))
+            save.mutate(prev)
+            toast.error("That edit was undone", { description: added.join(" · ") })
+            return
+          }
+          if (message) toast.success(message)
+        },
         onError: () => {
           setHistory((h) => h.slice(0, -1))
           tlq.refetch()
@@ -115,6 +141,18 @@ export function TimelineReview() {
     [view, save, tlq],
   )
   const base = () => pinAnchors(view!.timeline, view!)
+  /** An edit that can refuse (a trim past the end of the clip...): its message shows and nothing is saved. */
+  const tryApply = (make: () => Timeline, message?: string) => {
+    let next: Timeline
+    try {
+      next = make()
+    } catch (e) {
+      toast.error((e as Error).message)
+      return
+    }
+    apply(next, message)
+  }
+  const clipDur = (src: string | null | undefined) => files.find((f) => f.path === src)?.duration
 
   const undo = useCallback(() => {
     const prev = history[history.length - 1]
@@ -298,6 +336,23 @@ export function TimelineReview() {
               }}
               revising={start.isPending}
               onRevise={(notes) => start.mutate({ kind: "revise", notes }, { onSuccess: (j) => navigate(`/projects/${pid}/jobs/${j.id}`) })}
+              clipDur={clipDur}
+              onTrim={(s, a, b) => tryApply(() => trimShot(base(), s.segment, a, b, clipDur(s.src)), `Shot ${s.idx} trimmed`)}
+              onDuration={(s, d) => {
+                // B-roll under a voiceover: where it starts in its voiceover part (the part opens on its first shot)
+                const open = shots.find((x) => x.segment === s.segment && x.shot === 0)
+                const blockAt = s.shot != null && open ? Math.round((s.start - open.start) * 1000) / 1000 : undefined
+                tryApply(() => setDuration(base(), s.segment, s.shot, d, { clipDur: clipDur(s.src), blockAt }), `Shot ${s.idx} now plays for ${d} s`)
+              }}
+              onCaptions={(s, on) => tryApply(() => setCaptions(base(), s.segment, on), on ? "Captions on" : "Captions off")}
+              onAddText={(s, text) =>
+                tryApply(() => {
+                  const r = addText(base(), s, { text })
+                  setSelection({ type: "overlay", kind: "text", index: r.index })
+                  return r.timeline
+                }, "Text added")
+              }
+              onEndCard={(on) => tryApply(() => setEndCard(base(), on), on ? "End card on" : "End card off")}
             />
           </div>
         </div>

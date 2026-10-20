@@ -131,6 +131,8 @@ http://127.0.0.1:8000/docs).
 | **Planning**: each stage of the pipeline, the progress bar and the log | **Claude is planning…** while the brain call runs |
 | ![A shot and its reason](docs/screenshots/11-timeline-shot.jpg) | ![Editing a label](docs/screenshots/12-timeline-text.jpg) |
 | **Timeline review**: click a shot for the reason it's there, the words heard over it, its transition; swap or delete it | **Labels**: edit the text and style; drag shots to reorder, drop a clip from Media onto a shot to swap it, ⌘Z to undo |
+| ![Text added on a shot](docs/screenshots/11b-timeline-add-text.jpg) | ![End card toggle](docs/screenshots/11c-timeline-end-card.jpg) |
+| **Your own edits**: trim a clip or set how long a shot plays, captions on or off per part, add text on a shot (kept up long enough to read). Each save runs the pre-render check; an edit that would make the plan worse is undone with the reason | **End card** on or off for the video, from the plan overview. When you approve, what you changed becomes notes Claude follows on your next videos of that type (seen in 2+ videos) |
 | ![Rendering](docs/screenshots/13-render.jpg) | ![Result](docs/screenshots/14-result.jpg) |
 | **Rendering**: live progress per stage | **Result**: the 9:16 player, Download, Open in Finder, request changes, the contact sheet |
 | ![Version 2](docs/screenshots/16-result-v2.jpg) | ![Settings](docs/screenshots/17-settings.jpg) |

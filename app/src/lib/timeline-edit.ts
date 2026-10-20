@@ -129,3 +129,123 @@ export function deleteText(tl: Timeline, index: number): Timeline {
   out.text = (out.text ?? []).filter((_, i) => i !== index)
   return out
 }
+
+// ---------------------------------------------------------------- length, text on a shot, captions, end card
+
+/** Shortest shot the editor lets you set (the renderer needs a few frames; B-roll reads best at 1 s+). */
+export const MIN_SHOT = 0.3
+/** Text stays up long enough to read: labels 1.2 s, cards 2.5 s. */
+export const minTextDur = (style?: string | null) => (style === "card" ? 2.5 : 1.2)
+
+const r3 = (x: number) => Math.round(x * 1000) / 1000
+const isImage = (t: Record<string, unknown>) => t.type === "image" || (typeof t.src === "string" && /\.(jpe?g|png|heic|heif|webp|gif|tiff?)$/i.test(t.src))
+const isClip = (t: Record<string, unknown>) => (t.type == null || t.type === "clip") && !isImage(t)
+
+/** What a shot's length can be changed with: "trim" (in/out of the clip), "dur" (output seconds), or nothing. */
+export function lengthMode(tl: Timeline, seg: number, shot: number | null | undefined): { trim: boolean; dur: boolean; why?: string } {
+  const s = tl.segments[seg]
+  if (shot == null && s.type === "vo") return { trim: false, dur: false, why: "A voiceover part is as long as what's said: change the B-roll shots in it." }
+  if (shot != null) {
+    if (shot >= (s.shots?.length ?? 0) - 1) return { trim: false, dur: false, why: "The last shot runs to the end of the voiceover." }
+    return { trim: false, dur: true }
+  }
+  return { trim: isClip(s as Record<string, unknown>), dur: true }
+}
+
+/**
+ * Trim a clip shot to [inS, outS] of the source (the length then follows the clip, snapped to the beat when there's
+ * music). clipDur is the source's length, so the trim can't run past the end of the file.
+ */
+export function trimShot(tl: Timeline, seg: number, inS: number, outS: number, clipDur?: number | null): Timeline {
+  if (!lengthMode(tl, seg, null).trim) throw new Error("Only clips can be trimmed: set a length instead.")
+  if (!(inS >= 0)) throw new Error("The start can't be before the start of the clip.")
+  if (clipDur != null && outS > clipDur + 0.05) throw new Error(`The clip is only ${clipDur.toFixed(1)} s long.`)
+  if (!(outS - inS >= MIN_SHOT)) throw new Error(`A shot needs at least ${MIN_SHOT} s of the clip.`)
+  const out = clone(tl)
+  const t = out.segments[seg] as Record<string, unknown>
+  t.in = r3(inS)
+  t.out = r3(outS)
+  for (const k of ["dur", "beats", "to"]) delete t[k]
+  return out
+}
+
+/**
+ * Set a shot's length in output seconds. A clip keeps its start and plays on from it. B-roll under a voiceover keeps
+ * its start (pinned with "at", seconds into the voiceover part: blockAt) and the next shot starts exactly `dur` later
+ * instead of on its cue, so nothing before it moves.
+ */
+export function setDuration(
+  tl: Timeline,
+  seg: number,
+  shot: number | null | undefined,
+  dur: number,
+  opts: { clipDur?: number | null; blockAt?: number } = {},
+): Timeline {
+  const mode = lengthMode(tl, seg, shot)
+  if (!mode.dur) throw new Error(mode.why ?? "This shot's length can't be changed.")
+  if (!(dur >= MIN_SHOT)) throw new Error(`A shot needs to be at least ${MIN_SHOT} s.`)
+  if (dur > 60) throw new Error("A shot can be at most 60 s.")
+  const out = clone(tl)
+  const t = target(out, seg, shot) as Record<string, unknown>
+  if (isClip(t) && opts.clipDur != null) {
+    const start = typeof t.in === "number" ? t.in : 0
+    const speed = typeof t.speed === "number" ? t.speed : 1
+    if (start + dur * speed > opts.clipDur + 0.05)
+      throw new Error(`The clip only has ${((opts.clipDur - start) / speed).toFixed(1)} s left from this shot's start: trim its start earlier or pick another clip.`)
+  }
+  if (shot == null) {
+    t.dur = r3(dur)
+    for (const k of ["out", "beats", "to"]) delete t[k]
+    return out
+  }
+  if (opts.blockAt == null) throw new Error("Where this shot starts in the voiceover is needed to change its length.")
+  const next = out.segments[seg].shots![shot + 1] as Record<string, unknown>
+  if (shot > 0) {
+    t.at = r3(opts.blockAt)
+    delete t.cue
+  }
+  delete t.dur
+  next.at = r3(opts.blockAt + dur)
+  delete next.cue
+  return out
+}
+
+/** Add text on a shot, anchored to it (it moves with the shot), up for the whole shot or at least readable. */
+export function addText(
+  tl: Timeline,
+  at: { segment: number; shot?: number | null; idx: number; duration: number },
+  item: { text: string; style?: string | null; sub?: string | null },
+): { timeline: Timeline; index: number } {
+  const text = item.text.trim()
+  if (!text) throw new Error("Type the text first.")
+  const out = clone(tl)
+  const t = target(out, at.segment, at.shot)
+  if (!t.label) {
+    const used = labelsIn(out)
+    let name = `shot-${at.idx}`
+    for (let n = 2; used.has(name); n++) name = `shot-${at.idx}-${n}`
+    t.label = name
+  }
+  const style = item.style || "label"
+  const x: TextOverlay = { text, style, on: t.label }
+  if (item.sub?.trim()) x.sub = item.sub.trim()
+  if (at.duration < minTextDur(style)) x.dur = minTextDur(style)
+  out.text = [...(out.text ?? []), x]
+  return { timeline: out, index: out.text.length - 1 }
+}
+
+/** Captions on or off for one segment (a voiceover part counts as one: its B-roll shots share its captions). */
+export function setCaptions(tl: Timeline, seg: number, on: boolean): Timeline {
+  const out = clone(tl)
+  const s = out.segments[seg] as Record<string, unknown>
+  if (on) delete s.captions
+  else s.captions = false
+  return out
+}
+
+/** The handle end card on or off for the whole video. */
+export function setEndCard(tl: Timeline, on: boolean): Timeline {
+  const out = clone(tl)
+  out.end_card = { ...(out.end_card ?? {}), enabled: on }
+  return out
+}

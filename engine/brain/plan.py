@@ -1,4 +1,5 @@
-"""plan.build(): brief + transcripts + clip info + preset (+ the software's draft) -> the edit plan."""
+"""plan.build(): brief + transcripts + clip info + preset (+ the software's draft, + the creator's learned
+preferences) -> the edit plan."""
 from __future__ import annotations
 
 from pathlib import Path
@@ -54,7 +55,8 @@ def file_check(known: set[str]):
 def build(brain: Brain, brief: BriefData, transcripts: dict[str, dict[str, Any] | None],
           clip_info: list[dict[str, Any]], preset: str | None, *, draft: Timeline, draft_view: TimelineView | None,
           analysis: dict[str, Any], cwd: Path, known_files: set[str], answers: str = "",
-          style_spec: StyleSpec | None = None, matches: ClipMatchResult | None = None) -> PlanResult:
+          style_spec: StyleSpec | None = None, matches: ClipMatchResult | None = None,
+          learned: str = "") -> PlanResult:
     parts = [
         section("Brief", brief_text(brief)),
         section("Answers to clarifying questions", answers),
@@ -65,6 +67,8 @@ def build(brain: Brain, brief: BriefData, transcripts: dict[str, dict[str, Any] 
         section("Transcripts (source seconds)", "\n\n".join(transcript_text(s, t) for s, t in transcripts.items())),
         section('Sound effects (for "sfx")', sfx_text()),
     ]
+    if learned:
+        parts.insert(5, section("The creator's observed preferences (learned from their edits)", learned))
     if style_spec:
         parts.append(section("Reference reel style spec (copy this; the brief still wins)",
                              style_spec.model_dump_json(indent=1)))

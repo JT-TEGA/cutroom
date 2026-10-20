@@ -786,6 +786,67 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/projects/{pid}/learned": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Project Learned
+         * @description The notes for this project's content type: applied, paused by the brief, pending (seen once) or off.
+         */
+        get: operations["project_learned_projects__pid__learned_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/learned/{preset}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Learned */
+        get: operations["get_learned_learned__preset__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/learned/{preset}/{key}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete Learned
+         * @description Forget a note. It can come back if you keep making the same change.
+         */
+        delete: operations["delete_learned_learned__preset___key__delete"];
+        options?: never;
+        head?: never;
+        /**
+         * Patch Learned
+         * @description Turn a note off (it stays, and keeps counting) or back on.
+         */
+        patch: operations["patch_learned_learned__preset___key__patch"];
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1283,6 +1344,119 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
+        /** LearnedItem */
+        LearnedItem: {
+            /** Key */
+            key: string;
+            /** Topic */
+            topic: string;
+            /** Rule */
+            rule: string;
+            /**
+             * Projects
+             * @description project id -> what happened in that video
+             */
+            projects?: {
+                [key: string]: string;
+            };
+            /**
+             * Against
+             * @description project id -> the edit that went against it
+             */
+            against?: {
+                [key: string]: string;
+            };
+            /**
+             * Enabled
+             * @default true
+             */
+            enabled: boolean;
+            /**
+             * First Seen
+             * Format: date-time
+             */
+            first_seen?: string;
+            /**
+             * Last Seen
+             * Format: date-time
+             */
+            last_seen?: string;
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "applied" | "paused" | "pending" | "off";
+            /**
+             * Paused By
+             * @description the brief field that overrides it for this project
+             */
+            paused_by?: string | null;
+            /**
+             * Count
+             * @description Videos it was seen in, minus videos that edited against it.
+             */
+            readonly count: number;
+            /**
+             * Status
+             * @enum {string}
+             */
+            readonly status: "active" | "pending" | "off";
+        };
+        /** LearnedPref */
+        LearnedPref: {
+            /** Key */
+            key: string;
+            /** Topic */
+            topic: string;
+            /** Rule */
+            rule: string;
+            /**
+             * Projects
+             * @description project id -> what happened in that video
+             */
+            projects?: {
+                [key: string]: string;
+            };
+            /**
+             * Against
+             * @description project id -> the edit that went against it
+             */
+            against?: {
+                [key: string]: string;
+            };
+            /**
+             * Enabled
+             * @default true
+             */
+            enabled: boolean;
+            /**
+             * First Seen
+             * Format: date-time
+             */
+            first_seen?: string;
+            /**
+             * Last Seen
+             * Format: date-time
+             */
+            last_seen?: string;
+            /**
+             * Count
+             * @description Videos it was seen in, minus videos that edited against it.
+             */
+            readonly count: number;
+            /**
+             * Status
+             * @enum {string}
+             */
+            readonly status: "active" | "pending" | "off";
+        };
+        /** LearnedSet */
+        LearnedSet: {
+            /** Preset */
+            preset: string;
+            /** Prefs */
+            prefs?: components["schemas"]["LearnedPref"][];
+        };
         /** Music */
         Music: {
             /** Src */
@@ -1507,6 +1681,11 @@ export interface components {
              */
             favorites: number;
         };
+        /** PrefPatch */
+        PrefPatch: {
+            /** Enabled */
+            enabled: boolean;
+        };
         /** Preset */
         Preset: {
             /** Name */
@@ -1675,6 +1854,13 @@ export interface components {
              * @default true
              */
             copy_media: boolean;
+        };
+        /** ProjectLearned */
+        ProjectLearned: {
+            /** Preset */
+            preset: string | null;
+            /** Items */
+            items?: components["schemas"]["LearnedItem"][];
         };
         /** ProjectPatch */
         ProjectPatch: {
@@ -4005,6 +4191,136 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Job"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    project_learned_projects__pid__learned_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                pid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectLearned"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_learned_learned__preset__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                preset: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LearnedSet"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_learned_learned__preset___key__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                preset: string;
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LearnedSet"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    patch_learned_learned__preset___key__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                preset: string;
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PrefPatch"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LearnedSet"];
                 };
             };
             /** @description Validation Error */
