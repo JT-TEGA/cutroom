@@ -116,7 +116,9 @@ http://127.0.0.1:8000/docs).
 | ![Projects](docs/screenshots/01-projects.jpg) | ![New video: content type](docs/screenshots/02-new-video.jpg) |
 | **Projects**: every video with its status (draft, planning, needs review, rendering, done), live progress, search and a filter by content type | **New video, step 1**: the content type, grouped Lifestyle / Fashion / Gym |
 | ![Media, nothing added yet](docs/screenshots/03a-media-empty.jpg) | ![Media](docs/screenshots/03-media.jpg) |
-| **Step 2, before the first clip**: clips & photos is the one required card (Browse, or Import from Photos), voiceover and music are optional; the edit order waits as a slim bar and Continue stays off until there is a clip or photo | **Step 2, media**: drop clips and photos, a voice memo and a track; drag to reorder, click a name to rename it |
+| **Step 2, before the first clip**: clips & photos is the one required card (Browse, or Import from Photos), voiceover and music are optional; the edit order waits as a slim bar and Continue stays off until there is a clip or photo | **Step 2, media**: drop clips and photos, a voice memo (or record one) and a track; drag to reorder, click a name to rename it |
+| ![Recording a voiceover](docs/screenshots/03e-recording.jpg) | ![Takes](docs/screenshots/03f-takes.jpg) |
+| **Record a voiceover** from the Voiceover card: a live mic level with a hint (quiet / good / too loud), a running timer, Pause and Stop | **Takes**: listen back on the waveform, Re-record, Delete; **Use this** puts the picked take in the Voiceover slot, where it's cleaned up and transcribed like any voice memo |
 | ![The idea](docs/screenshots/04-idea.jpg) | ![The song](docs/screenshots/03b-music.jpg) |
 | **Step 3, the idea**: the brief as a form that autosaves; the preset's defaults are the placeholders, advanced fields fold away | **The song**: the waveform with the part the edit uses lit up (auto: just before the drop, or the strongest stretch), drag or slide to pick your own start, play from there; "I'll add this song in Instagram/TikTok when posting" |
 | ![Import from Photos](docs/screenshots/03c-photos.jpg) | ![Photos access](docs/screenshots/03d-photos-access.jpg) |
@@ -137,11 +139,11 @@ http://127.0.0.1:8000/docs).
 | **Brain**: Claude Code or the Anthropic API, with connection status and the system check | **Presets**: each content type's notes and defaults, editable |
 | ![Usage limit](docs/screenshots/19-usage-limit.jpg) | ![Claude revising](docs/screenshots/15-claude-revising.jpg) |
 | **When Claude can't work** (usage limit, logged out, not installed, no API key) a banner says what to do | **Revising**: your notes go to Claude, then straight to a new render |
-| ![Error screen](docs/screenshots/20-error-screen.jpg) |  |
-| **If a screen ever crashes**: a calm error screen inside the app with Go back / Reload and the technical details folded away |  |
+| ![Error screen](docs/screenshots/20-error-screen.jpg) | ![Mic blocked](docs/screenshots/03g-mic-blocked.jpg) |
+| **If a screen ever crashes**: a calm error screen inside the app with Go back / Reload and the technical details folded away | **Mic blocked?** How to allow it in Chrome (or in macOS, when it's the Mac saying no), then Try again |
 
 The screenshots come from a real end-to-end run against `./cutroom --demo`: synthetic footage, a `say` voice memo
-and a generated beat track went through the wizard, the pipeline (transcription, voice clean-up, beat detection,
+(recorded in the app's recorder, through Chrome's fake microphone) and a generated beat track went through the wizard, the pipeline (transcription, voice clean-up, beat detection,
 rendering) and the scripted brain. See [Development](#development) to regenerate them.
 
 ### Posting with the in-app sound
@@ -157,6 +159,17 @@ first frame. If you talk in the video, it reminds you to turn the song down in t
 Which part of the song the edit uses is yours to choose in the Music step: click or drag on the waveform, or use the
 slider, and play from there. Left on **Auto** it starts two bars before the drop that leads into the loudest part (or,
 without a drop, the loudest stretch as long as the video).
+
+### Recording a voiceover
+
+No voice memo yet? **Record** on the Voiceover card records one in the browser (the first time, Chrome asks for the
+mic). Record in a quiet room with the phone or mic about 20 cm away; the meter says when you're too quiet or too loud.
+Every take is kept in the project (`inputs/voiceover/takes/`), so they're still there after a refresh: listen back,
+re-record as often as you like, delete the ones you don't want. **Use this** uploads the take you pick through the
+same files endpoint as an imported memo, where it's converted to 48 kHz mono WAV, so the clean-up, transcription,
+voiceover mode and `vo_preview.wav` treat it exactly like one (using another take later swaps it in). The browser's
+call-style processing (echo cancellation, noise suppression, auto gain) is turned off: Cutroom's own clean-up does
+that job better.
 
 ### Import from Photos
 
@@ -210,6 +223,7 @@ curl -s -X POST "$API/projects/$ID/revise?wait=true" -H 'content-type: applicati
 | `POST /projects/{id}/analyse` · `plan` · `render` · `revise` · `reference` | background jobs |
 | `GET/PUT /projects/{id}/timeline` | the plan, resolved to output times (each shot knows its segment); save your own edits |
 | `GET /projects/{id}/voiceover`, `POST /projects/{id}/reveal` | voice preview + clean-up numbers; show a render in Finder |
+| `GET/POST /projects/{id}/takes`, `DELETE /projects/{id}/takes/{take}` | voiceover takes recorded in the app, kept until one is uploaded as the voiceover (`POST .../files` with `kind=voiceover`, `take=<id>`) |
 | `GET /projects/{id}/music` | the song: waveform, BPM, drops, the auto start and your pick (`PATCH` the brief's `music_start` / `music_in_app`) |
 | `GET /photos/status` · `POST /photos/refresh` · `GET /photos/albums` · `GET /photos/items` · `GET /photos/thumbnail/{id}` | the Mac Photos library (status says what to do without access) |
 | `POST /projects/{id}/photos/import` | a job: copy originals from Photos into the project, with what was skipped and why |
@@ -265,9 +279,10 @@ Paths to shared resources can be moved with `CUTROOM_ROOT`, `CUTROOM_WORKSPACE`,
 ## Development
 
 ```bash
-.venv/bin/python -m pytest        # 101 tests, ~25 s; never calls Claude (the brain is mocked) or reads your Photos library
+.venv/bin/python -m pytest        # 108 tests, ~35 s; never calls Claude (the brain is mocked) or reads your Photos library
 .venv/bin/ruff check .
 cd app && npm run lint            # the app's lint (also runs in npm run build); npm run gen:api regenerates its typed client
+cd app && npm test                # component tests (Vitest + jsdom): the voiceover recorder with a mocked mic
 ```
 
 `npm run lint` includes `cutroom/effect-returns` (app/eslint-rules/), which fails on any `useEffect` that can return
@@ -276,7 +291,9 @@ something other than a cleanup function: async effects, one-line effects like `u
 "destroy is not a function" (newer Chrome made `scrollTo()` return a Promise, which is how one slipped in).
 
 The end-to-end test generates tiny clips, a photo and a 120 BPM track, then plans, edits, renders, revises and
-renders again through the API.
+renders again through the API. `tests/test_takes.py` uploads recordings the way each browser's MediaRecorder makes
+them (Chrome's WebM Opus without a duration, Firefox's Ogg, Safari's MP4) and checks they become 48 kHz WAV
+voiceovers that the analysis and clean-up treat like any voice memo.
 
 The app is checked end to end in a real browser (headless Chrome via Puppeteer) against the demo brain:
 
@@ -284,6 +301,7 @@ The app is checked end to end in a real browser (headless Chrome via Puppeteer) 
 .venv/bin/python scripts/demo_media.py             # synthetic clips, photos, a voice memo, a track -> .demo/media
 ./cutroom --demo --no-open &
 node app/scripts/walkthrough.mjs                   # every screen, start to finish -> docs/screenshots/*.jpg
+                                                   # (the voiceover is recorded: Chrome's fake mic plays the demo memo)
 node app/scripts/check-interactions.mjs            # drag to reorder, swap from the bin, delete + undo, edit a label,
                                                    # drops the way the Photos app hands files over
 ```

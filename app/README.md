@@ -11,6 +11,7 @@ npm install
 npm run dev          # http://localhost:5173, expects the API on :8000 (CUTROOM_API_PORT to change)
 npm run gen:api      # regenerate src/api/schema.d.ts from the FastAPI OpenAPI schema (no server needed)
 npm run typecheck
+npm test             # component tests: Vitest + jsdom + Testing Library (src/**/*.test.tsx)
 npm run lint         # rule tests + eslint (cutroom/effect-returns, react-hooks/rules-of-hooks)
 npm run build        # lint, then tsc, then vite build
 ```
@@ -39,6 +40,23 @@ Every screen sits under a React Router `errorElement` (`components/ErrorScreen.t
 screen inside the app (Go back, Reload, technical details with a copy button) instead of React Router's default
 page; an `AppErrorBoundary` catches anything outside the router. In dev, `/__crash` throws on purpose to show it.
 
+### Tests
+
+`npm test` runs the component tests in jsdom. jsdom has no microphone and no network, so the tests bring their own:
+`src/test/setup.ts` swaps `fetch`, `Request` and `XMLHttpRequest` for a fake API (`src/test/server.ts`: a test
+registers `"POST /api/projects/p1/takes"` handlers and every call is recorded), and the recorder test
+(`pages/project/setup/VoiceRecorder.test.tsx`) mocks `getUserMedia`, `MediaRecorder` and the Web Audio meter. The
+swaps happen in the setup file because the API client keeps the `fetch` and `Request` it finds when it's imported.
+
+### The voiceover recorder
+
+`lib/recorder.ts` (`useRecorder`) wraps the mic: `getUserMedia` with the browser's call processing off, MediaRecorder
+(WebM Opus, or MP4 AAC in Safari), an AnalyserNode for the level meter, a timer that skips pauses, and a level hint.
+It never throws: a mic that can't be opened becomes a `problem` (`denied`, `denied-system` for macOS, `no-mic`,
+`busy`, `unsupported`, `insecure`) that `VoiceRecorder.tsx` explains with steps and Try again. Each take is saved to
+the project on Stop (`POST /projects/{id}/takes`, remuxed so it seeks); Use this fetches it back and uploads it to the
+Voiceover slot through `POST /projects/{id}/files` with its take id, the same path as an imported voice memo.
+
 ## Layout
 
 ```
@@ -46,9 +64,10 @@ src/
   api/          schema.d.ts (generated), client.ts (typed openapi-fetch client, errors, uploads with progress,
                 media URLs), queries.ts (TanStack Query hooks), jobs.ts (live job progress over the WebSocket)
   components/   app shell + sidebar, Claude banner, badges, thumbnails, video player, caption preview, shadcn/ui
-  lib/          presets (groups, icons, defaults), status mapping, timeline edits, formatting
-  pages/        Home, NewVideo, Settings, Presets, and project/: setup wizard, questions, job progress,
-                timeline review (bin · monitor · inspector · track), result
+  lib/          presets (groups, icons, defaults), status mapping, timeline edits, formatting, the mic recorder
+  pages/        Home, NewVideo, Settings, Presets, and project/: setup wizard (media step, voiceover recorder,
+                Photos picker, song), questions, job progress, timeline review (bin · monitor · inspector · track), result
+  test/         component-test setup: the fake API, jsdom gaps
 scripts/        gen-api.mjs, walkthrough.mjs (end-to-end run with the demo brain + screenshots),
                 check-interactions.mjs (drag and drop, undo, edits), browser.mjs (shared: launch, error capture,
                 client-side navigation "hops")
