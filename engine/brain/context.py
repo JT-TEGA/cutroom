@@ -62,6 +62,20 @@ def brand_text() -> str:
             f"emphasis colour {b['emphasis_color']}; default text style {b['text_style']}; grade {b['grade']}")
 
 
+SFX_HINTS = {"whoosh": "air swish, for a fast cut or whip", "bass_hit": "low boom, for a drop or reveal",
+             "pop": "short pop, for a sticker or text appearing", "riser": "1.6s build-up into a drop",
+             "click": "short dry click: a camera shutter, a tap"}
+
+
+def sfx_text() -> str:
+    """The sound effects a plan can use (assets/sfx/): the only way to add a sound besides an uploaded file."""
+    from ..edl import sfx_kit
+    kit = sfx_kit()
+    if not kit:
+        return "none: only uploaded audio files can be used as sound effects"
+    return "\n".join(f"- {s}" + (f": {SFX_HINTS[Path(s).stem]}" if Path(s).stem in SFX_HINTS else "") for s in kit)
+
+
 def analysis_text(a: dict[str, Any]) -> str:
     vo = ", ".join(v["src"] for v in a.get("voiceover") or []) or "none"
     cues = "\n".join(f'  - when "{c["say"]}" is said -> {c["src"]}' for c in a.get("cues") or [])

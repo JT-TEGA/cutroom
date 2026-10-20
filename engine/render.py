@@ -881,9 +881,11 @@ def render(name, draft=False, sheet=True, music=None):
     if music and edl.get("music"):
         edl["music"] = {**edl["music"], **music}
     in_app = bool((edl.get("music") or {}).get("in_app") and (edl.get("music") or {}).get("src"))
+    # everything the renderer reads, checked before any work: a plain message naming the item, never a KeyError
     problems = E.validate(edl)
     if problems:
-        die("edit plan has problems:\n  - " + "\n  - ".join(problems), code="invalid_plan", status=422)
+        die("This plan can't be rendered yet:\n  - " + "\n  - ".join(problems), code="invalid_plan", status=422,
+            hint="Fix it on the Plan screen (Ask Claude to change something), or regenerate the plan.")
     cfg = style_for(edl)
     W, H, fps = cfg["width"], cfg["height"], cfg["fps"]
     items, grid = E.build_timeline(edl, cfg)

@@ -7,7 +7,7 @@ from typing import Any
 from ..models import BriefData, Question
 from ..settings import load_app
 from .base import Brain, BrainRequest, ask
-from .context import analysis_text, brief_text, clips_text, preset_text, prompt, section
+from .context import analysis_text, brief_text, clips_text, preset_text, prompt, section, sfx_text
 from .schemas import AnalyseResult
 
 
@@ -23,6 +23,7 @@ def analyse(brain: Brain, brief: BriefData, analysis: dict[str, Any], files: lis
         section("Brief", brief_text(brief)),
         section("Automatic check", analysis_text(analysis)),
         section("Uploaded files (edit order)", clips_text(files)),
+        section("Sound effects every project has (assets/sfx/)", sfx_text()),
         section("Content-type presets", ", ".join(presets or [])),
         section("Preset for this content type", preset_text(analysis.get("preset"))),
         section("Previous answers", prev),

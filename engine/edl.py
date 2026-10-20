@@ -7,7 +7,7 @@ import difflib
 import re
 
 from .common import die, ffprobe, load_transcript, read_json, resolve, style_for, tc, work_dir
-from .config import EngineError
+from .config import EngineError, paths
 from .media import is_audio, is_image
 
 SPEECH_GAP = 0.6
@@ -245,9 +245,36 @@ def source_offsets(it, fps):
 
 # ---------------------------------------------------------------- validation
 
+def sfx_kit():
+    """The sound effects shared by every project (assets/sfx/), as plan paths: assets/sfx/whoosh.wav..."""
+    d = paths().sfx
+    return sorted(f"assets/sfx/{f.name}" for f in d.iterdir() if is_audio(f) and not f.name.startswith(".")) \
+        if d.is_dir() else []
+
+
+def _anchor(x):
+    """' on "hook"' / ' at "four sets"' / ' at 3.2s': where an overlay sits, for messages."""
+    if x.get("on") is not None:
+        return f' on "{x["on"]}"'
+    if x.get("cue"):
+        return f' at "{x["cue"]}"'
+    at = x.get("at", x.get("start"))
+    return f" at {at}s" if isinstance(at, (int, float)) else ""
+
+
+def _file(x):
+    """An item's file: a non-empty "src" string, or None. (An empty path would resolve to the project folder, which
+    exists, so "is there a file?" has to be asked before "does it exist?".)"""
+    src = x.get("src") if isinstance(x, dict) else None
+    return src.strip() if isinstance(src, str) and src.strip() else None
+
+
 def _check_src(where, sub, problems, probe):
-    src = sub.get("src")
-    if not src or not resolve(src).exists():
+    src = _file(sub)
+    if not src:
+        problems.append(f'{where} has no file ("src")')
+        return
+    if not resolve(src).exists():
         problems.append(f"{where}: file not found: {src}")
         return
     if is_image(src):
@@ -261,6 +288,13 @@ def _check_src(where, sub, problems, probe):
 
 
 def validate(edl):
+    """Everything the renderer needs, as plain problems naming the item ([] = ready to render). Runs before every
+    render, on the brain's plans (it gets the problems back and fixes them) and on the creator's saved edits."""
+    return segment_problems(edl) + overlay_problems(edl)
+
+
+def segment_problems(edl):
+    """The shots: each one's file, ranges and type. With any of these the plan can't even be laid out."""
     problems, probe = [], {}
     has_music = bool((edl.get("music") or {}).get("src"))
     for i, seg in enumerate(edl.get("segments", []), 1):
@@ -270,13 +304,17 @@ def validate(edl):
         elif k in ("clip", "image"):
             _check_src(f"segment #{i}", seg, problems, probe)
         elif k == "vo":
-            src = seg.get("src")
-            if not src or not resolve(src).exists():
+            src = _file(seg)
+            if not src:
+                problems.append(f'segment #{i}: a voiceover block has no file ("src")')
+            elif not resolve(src).exists():
                 problems.append(f"segment #{i}: voiceover not found: {src}")
             else:
                 dur = probe.setdefault(src, ffprobe(src))["duration"]
                 for j, kp in enumerate(seg.get("keep") or [], 1):
-                    if float(kp["out"]) <= float(kp["in"]):
+                    if not isinstance(kp, dict) or kp.get("in") is None or kp.get("out") is None:
+                        problems.append(f'segment #{i} keep {j}: needs "in" and "out"')
+                    elif float(kp["out"]) <= float(kp["in"]):
                         problems.append(f"segment #{i} keep {j}: out <= in")
                     elif float(kp["out"]) > dur + 0.05:
                         problems.append(f"segment #{i} keep {j}: out {kp['out']}s past the end of {src} ({dur:.2f}s)")
@@ -307,18 +345,43 @@ def validate(edl):
                 ramp_curve(seg["ramp"])
             except EngineError as e:
                 problems.append(f"segment #{i}: {e.message}")
-    for j, b in enumerate(edl.get("broll", []), 1):
-        if not resolve(b.get("src", "")).exists():
-            problems.append(f"broll #{j}: file not found: {b.get('src')}")
+    return problems
+
+
+def overlay_problems(edl):
+    """Music, b-roll, graphics and sound effects: each needs a real file. The shots can still be laid out without
+    them (the plan screen shows the problem), but the render can't."""
+    problems = []
     m = edl.get("music")
-    if m and m.get("src") and not resolve(m["src"]).exists():
+    if m and _file(m) and not resolve(_file(m)).exists():
         problems.append(f"music: file not found: {m['src']}")
-    for s in edl.get("sfx", []) + ([edl["sfx_on_cuts"]] if edl.get("sfx_on_cuts") else []):
-        if not resolve(s.get("src", "")).exists():
-            problems.append(f"sfx: file not found: {s.get('src')}")
-    for g in edl.get("graphics", []):
-        if not resolve(g.get("src", "")).exists():
-            problems.append(f"graphic: file not found: {g.get('src')}")
+
+    def need_file(what, x, noun="file", fix=""):
+        src = _file(x)
+        if not src:
+            problems.append(f'{what} has no {noun} ("src"){fix}')
+        elif not resolve(src).exists():
+            problems.append(f"{what}: file not found: {src}")
+
+    def items(key):
+        for j, x in enumerate(edl.get(key) or [], 1):
+            if isinstance(x, dict):
+                yield j, x
+            else:
+                problems.append(f"{key} item {j} isn't an object: {x!r}"[:200])
+
+    for j, b in items("broll"):
+        need_file(f"b-roll {j}{_anchor(b)}", b)
+    for j, g in items("graphics"):
+        need_file(f"graphic {j}{_anchor(g)}", g)
+    kit = sfx_kit()
+    fix = (f": use one of {', '.join(kit)} or an uploaded sound, or leave it out" if kit
+           else ": name an uploaded sound file, or leave it out")
+    for j, x in items("sfx"):
+        name = x.get("type") or x.get("name") or x.get("sound")
+        need_file(f"sound effect {j}" + (f' ("{name}"{_anchor(x)})' if name else _anchor(x)), x, "sound file", fix)
+    if isinstance(edl.get("sfx_on_cuts"), dict):
+        need_file('the sound on every cut ("sfx_on_cuts")', edl["sfx_on_cuts"], "sound file", fix)
     return problems
 
 

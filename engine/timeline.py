@@ -352,10 +352,12 @@ def check(tl: Timeline) -> list[str]:
 def view(tl: Timeline) -> TimelineView:
     """Lay the plan out (beat grid, voiceover cues, end card) -> every shot's output time and why it's there."""
     edl = tl.to_edl()
-    problems = E.validate(edl)
+    problems = E.segment_problems(edl)
     if problems:
         return TimelineView(timeline=tl, duration=0.0, shots=[], overlays=[], captions={}, problems=problems,
                             notes=tl.notes, target_length=tl.target_length)
+    # a sound effect or graphic without a file still lets the shots be laid out: show the plan with what to fix
+    blocked = E.overlay_problems(edl)
     cfg = style_for(edl)
     items, grid = E.build_timeline(edl, cfg)
     total = items[-1]["end"] if items else 0.0
@@ -429,5 +431,5 @@ def view(tl: Timeline) -> TimelineView:
         end_card = {"start": round(ec_item["start"], 3), "end": round(ec_item["end"], 3),
                     "handle": ec_item["endcard"]["handle"]}
     return TimelineView(timeline=tl, duration=round(total, 3), target_length=tl.target_length, shots=shots,
-                        overlays=overlays, captions=cap, music=music, end_card=end_card, problems=warn,
+                        overlays=overlays, captions=cap, music=music, end_card=end_card, problems=blocked + warn,
                         notes=tl.notes)

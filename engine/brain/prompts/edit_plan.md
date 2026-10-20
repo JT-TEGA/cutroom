@@ -40,6 +40,7 @@ shot with `"on": "<label>"` / `"on": "#3"` (+ `"offset"`, `"dur"`), or to the mo
   ],
   "music": {"src": "inputs/music/track.mp3", "start": "drop"},       // start: seconds | auto | drop | drop-16
   "broll": [{"src": "inputs/clips/shake.mp4", "in": 1.0, "cue": "protein shake", "dur": 2}],  // cutaway over to-camera talk
+  "sfx": [{"src": "assets/sfx/whoosh.wav", "on": "#3", "offset": -0.15, "gain_db": -6}],      // a sound FILE (see below)
   "captions": {"enabled": true, "replace": {"6 .30": "6:30"}},
   "end_card": {"enabled": false},
   "notes": ["Dropped take 1: stumbled"]
@@ -54,4 +55,8 @@ shot with `"on": "<label>"` / `"on": "#3"` (+ `"offset"`, `"dur"`), or to the mo
 - Grades: none, warm, clean-editorial, punchy, film.
 - Sound: talking shots are the voice (music ducks under it); `"ambient": true` keeps a clip's real sound; anything
   else is muted under the music. Slow-mo is muted.
+- Sound effects: every `sfx` item needs `"src"`, a real file: one from the "Sound effects" list in the request
+  (assets/sfx/...) or an uploaded audio file. There is no other way to name a sound (no `"type"`, no made-up file
+  names). If nothing in the list fits what the brief asks for, pick the closest one or leave it out, and say which in
+  `notes`.
 - A segment without `out`, `dur` or `beats` follows the beat grid when there is music.

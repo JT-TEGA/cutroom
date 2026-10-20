@@ -8,7 +8,7 @@ from ..models import BriefData
 from ..settings import load_app
 from ..timeline import Timeline, TimelineView
 from .base import Brain, BrainRequest, ask
-from .context import brief_text, clips_text, prompt, section, transcript_text, view_text
+from .context import brief_text, clips_text, prompt, section, sfx_text, transcript_text, view_text
 from .plan import PLAN_SCHEMA, file_check
 from .schemas import PlanResult
 
@@ -21,6 +21,7 @@ def revise(brain: Brain, timeline: Timeline, user_notes: str, *, cwd: Path, brie
         section("Brief", brief_text(brief)),
         section("Clips", clips_text(clip_info)),
         section("Transcripts (source seconds)", "\n\n".join(transcript_text(s, t) for s, t in transcripts.items())),
+        section('Sound effects (for "sfx")', sfx_text()),
     ]
     if current_view:
         parts.append(section("Current timeline view (output seconds)", view_text(current_view)))

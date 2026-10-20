@@ -17,6 +17,7 @@ from .context import (
     preset_text,
     prompt,
     section,
+    sfx_text,
     transcript_text,
     view_text,
 )
@@ -62,6 +63,7 @@ def build(brain: Brain, brief: BriefData, transcripts: dict[str, dict[str, Any] 
         section("Brand", brand_text()),
         section("Clips (edit order)", clips_text(clip_info)),
         section("Transcripts (source seconds)", "\n\n".join(transcript_text(s, t) for s, t in transcripts.items())),
+        section('Sound effects (for "sfx")', sfx_text()),
     ]
     if style_spec:
         parts.append(section("Reference reel style spec (copy this; the brief still wins)",
