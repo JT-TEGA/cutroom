@@ -460,3 +460,29 @@ def test_trimming_a_shot_is_not_read_as_a_new_hook() -> None:
     # a real reorder of the same clip's shots is still a move
     moved = tl([{"src": A, "in": 2.4}, {"src": B, "in": 2.2}, {"src": B, "in": 0.4}])
     assert "hook.b-roll" not in keys(diff(p, moved)) and any(k.startswith("hook.") for k in keys(diff(p, moved)))
+
+
+def vo_view(t: T.Timeline, durs: list[float]) -> T.TimelineView:
+    """A voiceover block (segment 0) laid out with these B-roll shot lengths."""
+    shots, at = [], 0.0
+    for j, (sh, d) in enumerate(zip(t.segments[0].shots, durs)):
+        shots.append(T.ResolvedShot(idx=j + 1, segment=0, shot=j, kind="clip", src=sh.src, in_=sh.in_ or 0,
+                                    out=(sh.in_ or 0) + d, start=at, end=at + d, duration=d, role="mute"))
+        at += d
+    return T.TimelineView(timeline=t, duration=at, shots=shots, overlays=[], captions={"enabled": True})
+
+
+def test_trimming_broll_under_a_voiceover_is_learned() -> None:
+    """The voiceover sets the block's length, so a trim of one B-roll shot is seen shot by shot; the shots that only
+    moved because the rest of the block was shared out again aren't the creator's edits."""
+    vo = {"type": "vo", "src": "inputs/voiceover/vo.wav"}
+    p = tl([{**vo, "shots": [{"src": A, "in": 0.5}, {"src": B, "cue": "alarm"}, {"src": C}, {"src": A, "in": 2.0},
+                             {"src": B, "cue": "bench"}]}])
+    # the trimmer: shot 2 keeps its start (pinned) and plays for 1.0 s; shot 3 starts right after it
+    f = tl([{**vo, "shots": [{"src": A, "in": 0.5}, {"src": B, "in": 2.5, "at": 1.4}, {"src": C, "at": 2.4},
+                             {"src": A, "in": 2.0}, {"src": B, "cue": "bench"}]}])
+    pv, fv = vo_view(p, [1.4, 1.4, 1.5, 1.5, 2.0]), vo_view(f, [1.4, 1.0, 1.7, 1.7, 2.0])
+    edits = {e.key: e for e in diff(p, f, pv, fv)}
+    assert set(edits) == {"timing.intro-shorter"} and edits["timing.intro-shorter"].instance == "1.4 s → 1.0 s"
+    # the same lengths without a pinned start (Claude's own re-spacing): nothing learned
+    assert diff(p, p.model_copy(deep=True), pv, fv) == []

@@ -1,5 +1,5 @@
-import { AlertTriangle, ArrowLeftRight, Film, Loader2, Music2, Plus, Quote, Repeat2, Scissors, Send, Sparkles, Trash2, Type, Wind, Zap, ZoomIn } from "lucide-react"
-import { type ReactNode, useEffect, useState } from "react"
+import { AlertTriangle, ArrowLeftRight, ChevronRight, Film, Loader2, Music2, Plus, Quote, Repeat2, Scissors, Send, Sparkles, Trash2, Type, Wind, Zap, ZoomIn } from "lucide-react"
+import { type ReactNode, useEffect, useRef, useState } from "react"
 import type { Project, ProjectFile, ResolvedShot, TextOverlay, Timeline, TimelineView } from "@/api/types"
 import { Thumb } from "@/components/Thumb"
 import { Button } from "@/components/ui/button"
@@ -9,8 +9,10 @@ import { Switch } from "@/components/ui/switch"
 import { Textarea } from "@/components/ui/textarea"
 import { basename, clock, secs, tc } from "@/lib/format"
 import { lengthMode, MIN_SHOT } from "@/lib/timeline-edit"
+import { clampRange, playsFor, type Range, type TrimCtx, withPlaysFor } from "@/lib/trim"
 import { cn } from "@/lib/utils"
 import { shotSrc, type Selection } from "./Track"
+import { Trimmer } from "./Trimmer"
 
 const TRANSITIONS = [
   { id: "", label: "Cut", icon: ArrowLeftRight },
@@ -76,7 +78,23 @@ function SwapPicker({ files, pid, current, onPick }: { files: ProjectFile[]; pid
 const num = (v: string) => (v.trim() === "" ? NaN : Number(v))
 const fmt = (x: number) => String(Math.round(x * 100) / 100)
 
-function Field({ label, value, onChange, onCommit, hint }: { label: string; value: string; onChange: (v: string) => void; onCommit: () => void; hint?: string }) {
+function Field({
+  label,
+  value,
+  onChange,
+  onCommit,
+  onFocus,
+  onBlur,
+  hint,
+}: {
+  label: string
+  value: string
+  onChange: (v: string) => void
+  onCommit: () => void
+  onFocus?: () => void
+  onBlur?: () => void
+  hint?: string
+}) {
   return (
     <label className="grid gap-1">
       <span className="text-[11.5px] text-muted-foreground">{label}</span>
@@ -85,6 +103,8 @@ function Field({ label, value, onChange, onCommit, hint }: { label: string; valu
         value={value}
         onChange={(e) => onChange(e.target.value)}
         onKeyDown={(e) => e.key === "Enter" && onCommit()}
+        onFocus={onFocus}
+        onBlur={onBlur}
         className="h-8 font-mono text-[12.5px]"
         aria-label={label}
       />
@@ -93,29 +113,54 @@ function Field({ label, value, onChange, onCommit, hint }: { label: string; valu
   )
 }
 
-/** Trim a clip (start / end of the source) or set a shot's length in seconds. */
-function LengthEditor({
+/**
+ * A shot's length. Clips: the visual trimmer (drag the handles on the filmstrip), with the exact Start / End /
+ * Plays-for numbers folded under "Enter exact times"; both edit the same draft, so they move together. Photos, cards
+ * and other shots: just how long it plays.
+ */
+export function LengthEditor({
   s,
   view,
+  pid,
   clipDur,
   onTrim,
   onDuration,
 }: {
   s: ResolvedShot
   view: TimelineView
+  pid: string
   clipDur?: number | null
   onTrim: (inS: number, outS: number) => void
   onDuration: (dur: number) => void
 }) {
   const mode = lengthMode(view.timeline, s.segment, s.shot)
+  const src = shotSrc(view, s)
+  const ctx: TrimCtx = {
+    clipDur: clipDur ?? Math.max(s.out, s.in + s.duration * s.speed),
+    speed: s.speed || 1,
+    shotStart: s.start,
+    beats: view.music?.beat_cut ? ((view.music.beats as number[] | undefined) ?? []) : [],
+  }
+  const committed = { in: s.in, out: s.out }
+  const [draft, setDraft] = useState<Range>(committed)
+  const [exact, setExact] = useState(false)
   const [a, setA] = useState(fmt(s.in))
   const [b, setB] = useState(fmt(s.out))
   const [d, setD] = useState(fmt(s.duration))
+  const [lastTyped, setLastTyped] = useState<"trim" | "dur">("trim")
+  const editing = useRef<string | null>(null)
+  // another shot, or the saved plan changed: start from what's saved
   useEffect(() => {
-    setA(fmt(s.in))
-    setB(fmt(s.out))
+    setDraft({ in: s.in, out: s.out })
     setD(fmt(s.duration))
   }, [s.idx, s.in, s.out, s.duration])
+  // the draft moved (a handle, or another field): show it in the fields not being typed in
+  useEffect(() => {
+    if (editing.current !== "a") setA(fmt(draft.in))
+    if (editing.current !== "b") setB(fmt(draft.out))
+    if (editing.current !== "d" && mode.trim) setD(fmt(playsFor(draft, ctx.speed)))
+  }, [draft.in, draft.out])
+
   if (!mode.trim && !mode.dur)
     return (
       <div>
@@ -123,39 +168,76 @@ function LengthEditor({
         <div className="text-[12px] text-subtle">{mode.why}</div>
       </div>
     )
-  const trimChanged = mode.trim && (num(a) !== Math.round(s.in * 100) / 100 || num(b) !== Math.round(s.out * 100) / 100)
+
+  const typed = (field: "a" | "b" | "d", v: string) => {
+    ;({ a: setA, b: setB, d: setD })[field](v)
+    const x = num(v)
+    if (!mode.trim || !Number.isFinite(x)) return
+    setLastTyped(field === "d" ? "dur" : "trim")
+    if (field === "a") setDraft(clampRange({ in: x, out: draft.out }, ctx, "in"))
+    else if (field === "b") setDraft(clampRange({ in: draft.in, out: x }, ctx, "out"))
+    else setDraft(withPlaysFor(draft, x, ctx))
+  }
+  const trimChanged = mode.trim && (draft.in !== committed.in || draft.out !== committed.out)
   const durChanged = num(d) !== Math.round(s.duration * 100) / 100
-  const commitTrim = () => trimChanged && onTrim(num(a), num(b))
-  const commitDur = () => durChanged && onDuration(num(d))
+  // what was typed is what's saved: Start / End trim the clip; Plays for sets the length (as before)
+  const commit = () => {
+    if (mode.trim && lastTyped === "trim" && trimChanged) onTrim(num(a), num(b))
+    else if (durChanged) onDuration(num(d))
+  }
+  const hint = s.voiceover
+    ? "It keeps its start; the next shot starts right after it (instead of on its cue)."
+    : s.beat_synced
+      ? "Sets it off the beat grid."
+      : `At least ${MIN_SHOT} s; B-roll reads best at 1 s+.`
+  const fields = (
+    <div className="grid gap-2.5">
+      {mode.trim && (
+        <div className="grid grid-cols-2 gap-2">
+          <Field label="Start (s)" value={a} onChange={(v) => typed("a", v)} onCommit={commit} onFocus={() => (editing.current = "a")} onBlur={() => (editing.current = null)} />
+          <Field label="End (s)" value={b} onChange={(v) => typed("b", v)} onCommit={commit} onFocus={() => (editing.current = "b")} onBlur={() => (editing.current = null)} />
+        </div>
+      )}
+      <div className="grid grid-cols-[1fr_auto] items-end gap-2">
+        <Field label="Plays for (s)" value={d} onChange={(v) => typed("d", v)} onCommit={commit} onFocus={() => (editing.current = "d")} onBlur={() => (editing.current = null)} hint={mode.trim ? undefined : hint} />
+        <Button size="sm" variant="outline" className="h-8" disabled={!(trimChanged || durChanged)} onClick={commit}>
+          {mode.trim && lastTyped === "trim" ? "Trim" : "Set"}
+        </Button>
+      </div>
+    </div>
+  )
   return (
     <div>
       <div className="mb-2 flex items-center gap-1.5 text-[12px] font-medium text-muted-foreground">
-        <Scissors className="size-3.5" /> Length
+        <Scissors className="size-3.5" /> {mode.trim ? "Trim" : "Length"}
       </div>
-      <div className="grid gap-2.5 rounded-2xl border border-border p-3">
-        {mode.trim && (
-          <div className="grid grid-cols-[1fr_1fr_auto] items-end gap-2">
-            <Field label="Start (s)" value={a} onChange={setA} onCommit={commitTrim} />
-            <Field label="End (s)" value={b} onChange={setB} onCommit={commitTrim} />
-            <Button size="sm" variant="outline" className="h-8" disabled={!trimChanged} onClick={commitTrim}>
-              Trim
-            </Button>
-            {clipDur != null && <span className="col-span-3 -mt-1 text-[11px] text-subtle">of the clip ({fmt(clipDur)} s long)</span>}
-          </div>
-        )}
-        <div className="grid grid-cols-[1fr_auto] items-end gap-2">
-          <Field
-            label="Plays for (s)"
-            value={d}
-            onChange={setD}
-            onCommit={commitDur}
-            hint={s.voiceover ? "It keeps its start; the next shot starts right after it (instead of on its cue)." : s.beat_synced ? "Sets it off the beat grid." : `At least ${MIN_SHOT} s; B-roll reads best at 1 s+.`}
+      {mode.trim && src ? (
+        <div className="grid gap-3 rounded-2xl border border-border p-3">
+          <Trimmer
+            pid={pid}
+            src={src}
+            ctx={ctx}
+            range={draft}
+            onChange={(r) => {
+              setLastTyped("trim")
+              setDraft(r)
+            }}
+            onCommit={(r) => onTrim(r.in, r.out)}
           />
-          <Button size="sm" variant="outline" className="mb-auto mt-[18px] h-8" disabled={!durChanged} onClick={commitDur}>
-            Set
-          </Button>
+          <div className="text-[11px] text-subtle">{hint}</div>
+          <button
+            type="button"
+            aria-expanded={exact}
+            onClick={() => setExact((x) => !x)}
+            className="flex items-center gap-1 self-start text-[12px] font-medium text-muted-foreground hover:text-foreground"
+          >
+            <ChevronRight className={cn("size-3.5 transition", exact && "rotate-90")} /> Enter exact times
+          </button>
+          {exact && fields}
         </div>
-      </div>
+      ) : (
+        <div className="rounded-2xl border border-border p-3">{fields}</div>
+      )}
     </div>
   )
 }
@@ -256,7 +338,7 @@ function ShotPanel({
         <Row k="On the beat">{s.beat_synced ? "yes" : "no"}</Row>
       </div>
 
-      <LengthEditor s={s} view={view} clipDur={clipDur} onTrim={onTrim} onDuration={onDuration} />
+      <LengthEditor s={s} view={view} pid={pid} clipDur={clipDur} onTrim={onTrim} onDuration={onDuration} />
 
       {spoken && (
         <label className="flex items-center justify-between gap-3 rounded-2xl border border-border px-4 py-3">

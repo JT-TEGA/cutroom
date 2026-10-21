@@ -542,6 +542,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/projects/{pid}/filmstrip": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Filmstrip
+         * @description Frames sampled evenly across a whole clip, for the visual trimmer. The first request starts a background build
+         *     and answers "building"; ask again until "ready". Cached in the project (instant next time, gone with it); each
+         *     frame's path is for GET /media/file.
+         */
+        get: operations["filmstrip_projects__pid__filmstrip_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/presets": {
         parameters: {
             query?: never;
@@ -1218,6 +1240,38 @@ export interface components {
              * @default false
              */
             clear_trim: boolean;
+        };
+        /** Filmstrip */
+        Filmstrip: {
+            /** Src */
+            src: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "ready" | "building" | "failed";
+            /**
+             * Duration
+             * @description the clip's length in seconds
+             */
+            duration: number;
+            /** Frames */
+            frames?: components["schemas"]["Frame"][];
+            /** Error */
+            error?: string | null;
+        };
+        /** Frame */
+        Frame: {
+            /**
+             * T
+             * @description seconds into the clip
+             */
+            t: number;
+            /**
+             * Path
+             * @description relative to the workspace (for GET /media/file)
+             */
+            path: string;
         };
         /** HTTPValidationError */
         HTTPValidationError: {
@@ -3793,6 +3847,46 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    filmstrip_projects__pid__filmstrip_get: {
+        parameters: {
+            query: {
+                /** @description the clip, as the plan names it (inputs/clips/a.mp4) */
+                src: string;
+                /** @description frames (default: one per 0.5 s, 8+) */
+                count?: number | null;
+                /** @description frame width in pixels */
+                w?: number;
+                /** @description build it now instead of in the background */
+                wait?: boolean;
+            };
+            header?: never;
+            path: {
+                pid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Filmstrip"];
+                };
             };
             /** @description Validation Error */
             422: {

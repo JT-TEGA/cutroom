@@ -28,7 +28,7 @@ const plan = (): Timeline =>
 describe("length", () => {
   it("trims a clip and lets the trim set the length", () => {
     const tl = plan()
-    const out = trimShot(tl, 1, 0.5, 2.25, 10)
+    const out = trimShot(tl, 1, null, 0.5, 2.25, { clipDur: 10 })
     expect(out.segments[1]).toMatchObject({ in: 0.5, out: 2.25 })
     expect(out.segments[1]).not.toHaveProperty("beats")
     expect(out.segments[1]).not.toHaveProperty("to")
@@ -36,10 +36,10 @@ describe("length", () => {
   })
 
   it("refuses a trim that can't render", () => {
-    expect(() => trimShot(plan(), 0, 2, 12, 8)).toThrow("only 8.0 s long")
-    expect(() => trimShot(plan(), 0, 3, 3.1, 8)).toThrow("at least")
-    expect(() => trimShot(plan(), 0, -1, 2, 8)).toThrow("before the start")
-    expect(() => trimShot(plan(), 2, 0, 1)).toThrow("Only clips")
+    expect(() => trimShot(plan(), 0, null, 2, 12, { clipDur: 8 })).toThrow("only 8.0 s long")
+    expect(() => trimShot(plan(), 0, null, 3, 3.1, { clipDur: 8 })).toThrow("at least")
+    expect(() => trimShot(plan(), 0, null, -1, 2, { clipDur: 8 })).toThrow("before the start")
+    expect(() => trimShot(plan(), 2, null, 0, 1)).toThrow("Only clips")
   })
 
   it("sets a length in seconds, within what's left of the clip", () => {
@@ -49,6 +49,13 @@ describe("length", () => {
     expect(() => setDuration(plan(), 0, null, 9, { clipDur: 8 })).toThrow("only has 7.0 s left")
     expect(() => setDuration(plan(), 0, null, 0.1, { clipDur: 8 })).toThrow("at least")
     expect(setDuration(plan(), 2, null, 3.2).segments[2]).toMatchObject({ dur: 3.2 })   // a photo: no clip to run out of
+  })
+
+  it("trims B-roll under a voiceover: the part of the clip it uses, and how long it plays", () => {
+    const shots = trimShot(plan(), 3, 1, 1.5, 2.7, { clipDur: 6, blockAt: 2.35 }).segments[3].shots!
+    expect(shots[1]).toMatchObject({ in: 1.5, at: 2.35 })
+    expect(shots[2]).toMatchObject({ at: 3.55 })
+    expect(() => trimShot(plan(), 3, 2, 0, 1, { blockAt: 4 })).toThrow("Only clips")     // the last one: no
   })
 
   it("gives B-roll under a voiceover exactly that length: its start stays, the next shot starts after it", () => {

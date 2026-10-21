@@ -9,7 +9,9 @@ export const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
  * mic: a WAV file the browser hears as its microphone (Chrome's fake capture device; the permission is granted). */
 export async function launch(viewport = { width: 1440, height: 900, deviceScaleFactor: 2 }, { mic } = {}) {
   const browser = await puppeteer.launch({
-    headless: true,
+    // CUTROOM_HEADLESS=shell: chrome-headless-shell, which keeps drawing while the Mac's display sleeps (the full
+    // headless Chrome stops painting then, so screenshots and clicks time out)
+    headless: process.env.CUTROOM_HEADLESS === "shell" ? "shell" : true,
     defaultViewport: viewport,
     executablePath: process.env.CUTROOM_CHROME || undefined,
     args: [

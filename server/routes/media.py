@@ -7,7 +7,9 @@ from pathlib import Path
 from fastapi import APIRouter, Depends, Query
 from fastapi.responses import FileResponse
 
+from engine import filmstrip as engine_filmstrip
 from engine.config import EngineError, paths
+from engine.filmstrip import Filmstrip
 
 from ..deps import Services, services
 from .projects import output_file
@@ -91,3 +93,16 @@ def thumbnail(path: str = Query(..., description="clip or photo, relative to the
                 run(["ffmpeg", "-hide_banner", "-loglevel", "error", "-y", "-ss", f"{at:.2f}", "-i", src,
                      "-frames:v", "1", "-vf", f"scale={w}:-2", "-q:v", "4", out])
     return FileResponse(out, media_type="image/jpeg", headers={"Cache-Control": "max-age=86400"})
+
+
+@router.get("/projects/{pid}/filmstrip", response_model=Filmstrip)
+def filmstrip(pid: str, src: str = Query(..., description="the clip, as the plan names it (inputs/clips/a.mp4)"),
+              count: int | None = Query(None, ge=2, le=120, description="frames (default: one per 0.5 s, 8+)"),
+              w: int = Query(120, ge=48, le=480, description="frame width in pixels"),
+              wait: bool = Query(False, description="build it now instead of in the background"),
+              svc: Services = Depends(services)) -> Filmstrip:
+    """Frames sampled evenly across a whole clip, for the visual trimmer. The first request starts a background build
+    and answers "building"; ask again until "ready". Cached in the project (instant next time, gone with it); each
+    frame's path is for GET /media/file."""
+    svc.store.get(pid)
+    return engine_filmstrip.strip(svc.store.dir(pid), src, count=count, w=w, wait=wait)

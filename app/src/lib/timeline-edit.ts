@@ -147,20 +147,35 @@ export function lengthMode(tl: Timeline, seg: number, shot: number | null | unde
   if (shot == null && s.type === "vo") return { trim: false, dur: false, why: "A voiceover part is as long as what's said: change the B-roll shots in it." }
   if (shot != null) {
     if (shot >= (s.shots?.length ?? 0) - 1) return { trim: false, dur: false, why: "The last shot runs to the end of the voiceover." }
-    return { trim: false, dur: true }
+    return { trim: isClip(s.shots![shot] as Record<string, unknown>), dur: true }
   }
   return { trim: isClip(s as Record<string, unknown>), dur: true }
 }
 
 /**
- * Trim a clip shot to [inS, outS] of the source (the length then follows the clip, snapped to the beat when there's
- * music). clipDur is the source's length, so the trim can't run past the end of the file.
+ * Trim a clip shot to [inS, outS] of the source. A shot of its own then follows the clip (snapped to the beat when
+ * there's music); B-roll under a voiceover uses the clip from inS and plays for (outS - inS) / speed, its start in
+ * the voiceover staying put (see setDuration). clipDur: the source's length, so a trim can't run past the end.
  */
-export function trimShot(tl: Timeline, seg: number, inS: number, outS: number, clipDur?: number | null): Timeline {
-  if (!lengthMode(tl, seg, null).trim) throw new Error("Only clips can be trimmed: set a length instead.")
+export function trimShot(
+  tl: Timeline,
+  seg: number,
+  shot: number | null | undefined,
+  inS: number,
+  outS: number,
+  opts: { clipDur?: number | null; blockAt?: number } = {},
+): Timeline {
+  if (!lengthMode(tl, seg, shot).trim) throw new Error("Only clips can be trimmed: set a length instead.")
   if (!(inS >= 0)) throw new Error("The start can't be before the start of the clip.")
-  if (clipDur != null && outS > clipDur + 0.05) throw new Error(`The clip is only ${clipDur.toFixed(1)} s long.`)
-  if (!(outS - inS >= MIN_SHOT)) throw new Error(`A shot needs at least ${MIN_SHOT} s of the clip.`)
+  if (opts.clipDur != null && outS > opts.clipDur + 0.05) throw new Error(`The clip is only ${opts.clipDur.toFixed(1)} s long.`)
+  const t0 = target(tl, seg, shot) as Record<string, unknown>
+  const speed = typeof t0.speed === "number" ? t0.speed : 1
+  if (!(outS - inS >= MIN_SHOT * speed - 1e-6)) throw new Error(`A shot needs at least ${MIN_SHOT} s of the clip.`)
+  if (shot != null) {
+    const moved = clone(tl)
+    ;(target(moved, seg, shot) as Record<string, unknown>).in = r3(inS)
+    return setDuration(moved, seg, shot, r3((outS - inS) / speed), opts)
+  }
   const out = clone(tl)
   const t = out.segments[seg] as Record<string, unknown>
   t.in = r3(inS)

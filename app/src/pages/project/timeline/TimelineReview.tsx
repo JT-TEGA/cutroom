@@ -153,6 +153,11 @@ export function TimelineReview() {
     apply(next, message)
   }
   const clipDur = (src: string | null | undefined) => files.find((f) => f.path === src)?.duration
+  /** B-roll under a voiceover: where it starts in its voiceover part (the part opens on its first shot). */
+  const blockAt = (s: ResolvedShot) => {
+    const open = shots.find((x) => x.segment === s.segment && x.shot === 0)
+    return s.shot != null && open ? Math.round((s.start - open.start) * 1000) / 1000 : undefined
+  }
 
   const undo = useCallback(() => {
     const prev = history[history.length - 1]
@@ -337,13 +342,12 @@ export function TimelineReview() {
               revising={start.isPending}
               onRevise={(notes) => start.mutate({ kind: "revise", notes }, { onSuccess: (j) => navigate(`/projects/${pid}/jobs/${j.id}`) })}
               clipDur={clipDur}
-              onTrim={(s, a, b) => tryApply(() => trimShot(base(), s.segment, a, b, clipDur(s.src)), `Shot ${s.idx} trimmed`)}
-              onDuration={(s, d) => {
-                // B-roll under a voiceover: where it starts in its voiceover part (the part opens on its first shot)
-                const open = shots.find((x) => x.segment === s.segment && x.shot === 0)
-                const blockAt = s.shot != null && open ? Math.round((s.start - open.start) * 1000) / 1000 : undefined
-                tryApply(() => setDuration(base(), s.segment, s.shot, d, { clipDur: clipDur(s.src), blockAt }), `Shot ${s.idx} now plays for ${d} s`)
-              }}
+              onTrim={(s, a, b) =>
+                tryApply(() => trimShot(base(), s.segment, s.shot, a, b, { clipDur: clipDur(s.src), blockAt: blockAt(s) }), `Shot ${s.idx} trimmed`)
+              }
+              onDuration={(s, d) =>
+                tryApply(() => setDuration(base(), s.segment, s.shot, d, { clipDur: clipDur(s.src), blockAt: blockAt(s) }), `Shot ${s.idx} now plays for ${d} s`)
+              }
               onCaptions={(s, on) => tryApply(() => setCaptions(base(), s.segment, on), on ? "Captions on" : "Captions off")}
               onAddText={(s, text) =>
                 tryApply(() => {

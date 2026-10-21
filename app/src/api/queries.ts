@@ -6,6 +6,7 @@ export const keys = {
   projects: ["projects"] as const,
   project: (id: string) => ["project", id] as const,
   timeline: (id: string) => ["timeline", id] as const,
+  filmstrip: (id: string, src: string) => ["filmstrip", id, src] as const,
   outputs: (id: string) => ["outputs", id] as const,
   voiceover: (id: string) => ["voiceover", id] as const,
   takes: (id: string) => ["takes", id] as const,
@@ -44,6 +45,17 @@ export function useTimeline(id: string, enabled = true) {
     queryFn: () => call(api.GET("/projects/{pid}/timeline", { params: { path: { pid: id } } })),
     enabled,
     retry: (n, e) => (e as { status?: number }).status !== 404 && n < 2,
+  })
+}
+
+/** A clip's filmstrip for the visual trimmer: built in the background on first ask, polled until it's ready. */
+export function useFilmstrip(id: string, src: string | null | undefined) {
+  return useQuery({
+    queryKey: keys.filmstrip(id, src ?? ""),
+    queryFn: () => call(api.GET("/projects/{pid}/filmstrip", { params: { path: { pid: id }, query: { src: src! } } })),
+    enabled: Boolean(src),
+    staleTime: Infinity,
+    refetchInterval: (q) => (q.state.data?.status === "building" ? 700 : false),
   })
 }
 

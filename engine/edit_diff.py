@@ -102,13 +102,19 @@ def _lis(seq: list[int]) -> set[int]:
     return out
 
 
-def _spans(view: TimelineView | None) -> dict[int, tuple[float, float]]:
-    """segment index -> (output start, duration) from a resolved view."""
-    out: dict[int, tuple[float, float]] = {}
-    for s in view.shots if view else []:
-        st, d = out.get(s.segment, (s.start, 0.0))
-        out[s.segment] = (min(st, s.start), d + s.duration)
-    return out
+def _spans(view: TimelineView | None) -> dict[tuple[int, int | None], tuple[float, float]]:
+    """(segment index, shot index in a voiceover block or None) -> (output start, duration) from a resolved view."""
+    return {(s.segment, s.shot): (s.start, s.duration) for s in (view.shots if view else [])}
+
+
+def _timed(P: list[Segment], F: list[Segment], pi: int, fi: int) -> list[tuple[int | None, int | None]]:
+    """The shots of a kept pair whose length to compare. A voiceover block is as long as the voiceover, so its B-roll
+    shots count one by one, and only those the creator re-timed (the editor pins the next shot's start: its "at"
+    changed); the shots around them just share out the rest of the block."""
+    if P[pi].type == "vo" and F[fi].type == "vo":
+        ps, fs = P[pi].shots or [], F[fi].shots or []
+        return [(j, j) for j in range(min(len(ps), len(fs)) - 1) if fs[j + 1].at != ps[j + 1].at]
+    return [(None, None)]
 
 
 def _trans(x: object) -> str:
@@ -210,10 +216,11 @@ def diff(proposed: Timeline, final: Timeline, pv: TimelineView | None = None,
     sp, sf = _spans(pv), _spans(fv)
     intro: list[tuple[float, float]] = []
     rest: list[tuple[float, float]] = []
-    for pi, fi in pairs:
-        if pi not in sp or fi not in sf:
+    timed = [((pi, pj), (fi, fj)) for pi, fi in pairs for pj, fj in _timed(P, F, pi, fi)]
+    for kp, kf in timed:
+        if kp not in sp or kf not in sf:
             continue
-        (start, dp), (_, df) = sp[pi], sf[fi]
+        (start, dp), (_, df) = sp[kp], sf[kf]
         if dp <= 0 or abs(df - dp) < MIN_DELTA or abs(df - dp) / dp < MIN_RATIO:
             continue
         (intro if start < INTRO_S else rest).append((dp, df))

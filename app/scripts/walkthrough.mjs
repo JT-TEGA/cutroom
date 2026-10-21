@@ -595,6 +595,50 @@ async function mainFlow(voSeconds) {
   await toastSays(card === "true" ? "End card on" : "End card off")
   await planOk("the end card toggle")
 
+  // the visual trimmer on a clip under the voiceover: the filmstrip builds, then drag the end handle in
+  {
+    const v0 = await api(`/projects/${pid}/timeline`)
+    const target = v0.shots.find((s, i) => s.kind === "clip" && s.shot != null && v0.shots[i + 1]?.segment === s.segment && s.idx > 1)
+    if (!target) throw new Error("no clip under the voiceover to trim")
+    await page.locator(`[data-shot="${target.idx}"] button`).click()
+    await waitText(`Shot ${target.idx}`)
+    await page.waitForSelector('[data-testid="filmstrip"]')
+    await page.$eval('[data-testid="filmstrip"]', (el) => el.scrollIntoView({ block: "center" }))
+    await page.waitForFunction(() => document.querySelectorAll('[data-testid="filmstrip"] img').length >= 8, { timeout: 60_000 })
+    const strip = await page.$eval('[data-testid="filmstrip"]', (el) => {
+      const r = el.getBoundingClientRect()
+      return { left: r.left, width: r.width, top: r.top, height: r.height }
+    })
+    const end = await page.$eval('[role="slider"][aria-label="Trim end"]', (el) => {
+      const r = el.getBoundingClientRect()
+      return { x: r.left + r.width / 2, y: r.top + r.height / 2, value: Number(el.getAttribute("aria-valuenow")) }
+    })
+    const start = Number(await page.$eval('[role="slider"][aria-label="Trim start"]', (el) => el.getAttribute("aria-valuenow")))
+    const clip = Number(await page.$eval('[role="slider"][aria-label="Trim end"]', (el) => el.getAttribute("aria-valuemax")))
+    // pull the end in by about a third of what the shot uses (never under the minimum)
+    const goal = Math.max(start + 0.5, end.value - (end.value - start) / 3)
+    await page.mouse.move(end.x, end.y)
+    await page.mouse.down()
+    await page.mouse.move(strip.left + (goal / clip) * strip.width, end.y, { steps: 8 })
+    await waitText("plays for")
+    const live = await page.$eval('[data-testid="handle-time"]', (el) => el.textContent)
+    log(`trim: dragging the end of shot ${target.idx}: ${live}`)
+    await shot("11d-timeline-trim", 400)
+    await page.mouse.up()
+    await toastSays(`Shot ${target.idx} trimmed`)
+    const v = await planOk("trimming on the filmstrip")
+    const now = v.shots.find((s) => s.idx === target.idx)
+    if (!(now.duration < target.duration - 0.1)) throw new Error(`shot ${target.idx} wasn't trimmed: ${target.duration} -> ${now.duration}`)
+    log(`trim: shot ${target.idx} ${target.duration.toFixed(2)} s -> ${now.duration.toFixed(2)} s (clip ${now.in.toFixed(2)}-${now.out.toFixed(2)})`)
+    // the exact numbers follow the handles
+    await click("Enter exact times")
+    const endField = Number(await page.$eval('input[aria-label="End (s)"]', (el) => el.value))
+    const handleAt = Number(await page.$eval('[role="slider"][aria-label="Trim end"]', (el) => el.getAttribute("aria-valuenow")))
+    if (Math.abs(endField - handleAt) > 0.011) throw new Error(`End (s) says ${endField}, the handle is at ${handleAt}`)
+    await shot("11e-timeline-trim-exact", 600)
+    await page.keyboard.press("Escape")
+  }
+
   const textPill = await page.$("button[title='5:30AM']")
   if (textPill) {
     await textPill.click()
@@ -620,6 +664,10 @@ async function mainFlow(voSeconds) {
   await waitText("Version 1")
   await idle()
   await shot("14-result", 2500)
+  // approving learned from the hand edits: the trims are timing notes for this project
+  const learned = (await api(`/projects/${pid}/learned`)).items.filter((p) => pid in p.projects)
+  if (!learned.some((p) => p.key.startsWith("timing."))) throw new Error(`no timing note learned from the trims: ${JSON.stringify(learned.map((p) => p.key))}`)
+  log(`learned from this video: ${learned.map((p) => p.key).join(", ")}`)
   await hop(page)
 
   // 11. request changes -> v2

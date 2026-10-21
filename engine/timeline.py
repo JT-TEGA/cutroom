@@ -423,8 +423,12 @@ def view(tl: Timeline) -> TimelineView:
                     "replace": (edl.get("captions") or {}).get("replace", {})})
     music = None
     if grid:
+        every = (edl.get("beat_sync") or {}).get("every", cfg["beat_every"])
         music = {"src": edl["music"]["src"], "bpm": grid["bpm"], "starts_at": round(grid["start"], 3),
-                 "drops": [d for d in grid["drops"] if d <= total], "in_app": bool(edl["music"].get("in_app"))}
+                 "drops": [d for d in grid["drops"] if d <= total], "in_app": bool(edl["music"].get("in_app")),
+                 # output seconds, for snapping a trim to the beat; beat_cut: this edit cuts on the beat
+                 "beats": [round(b, 3) for b in grid["beats"] if b <= total + 4 * grid["period"]],
+                 "beat_cut": bool(every) and every not in ("0", "off", "none")}
     ec_item = next((i for i in items if i["kind"] == "endcard"), None)
     end_card = None
     if ec_item:
